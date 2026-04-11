@@ -193,9 +193,9 @@ export default {
 
   .flowrite-margin-composer__surface {
     border: 1px solid rgba(36, 42, 53, 0.12);
-    border-radius: 16px;
-    background: rgba(255, 252, 247, 0.98);
-    box-shadow: 0 14px 30px rgba(26, 33, 44, 0.08);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 12px 28px rgba(26, 33, 44, 0.08);
     padding: 14px;
   }
 
@@ -218,18 +218,19 @@ export default {
 
   .flowrite-margin-composer__close {
     appearance: none;
-    border: none;
-    background: transparent;
+    border: 1px solid rgba(36, 42, 53, 0.12);
+    border-radius: 999px;
+    background: rgba(247, 248, 250, 0.96);
     color: rgba(74, 86, 104, 0.82);
     cursor: pointer;
-    font-size: 20px;
+    font-size: 14px;
     line-height: 1;
-    padding: 0;
+    padding: 5px 8px;
   }
 
   .flowrite-margin-composer__quote {
     margin: 10px 0 12px;
-    color: rgba(39, 49, 66, 0.86);
+    color: rgba(39, 49, 66, 0.92);
     font-size: 13px;
     line-height: 1.5;
   }
