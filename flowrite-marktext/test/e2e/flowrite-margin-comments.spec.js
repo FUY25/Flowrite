@@ -182,6 +182,42 @@ test.describe('Flowrite margin comments', () => {
     }
   })
 
+  test('renders comments in an integrated margin', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-integrated-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n\nA later paragraph that lands with a sharper note.\n', 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], { userDataDir })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await selectTextInEditor(page, 'reflective paragraph')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+
+      const annotationsAside = await page.locator('.flowrite-annotations').count()
+      expect(annotationsAside).toBe(0)
+      await expect(page.locator('.editor-main__margin-overlays [data-testid="flowrite-margin-comments"]')).toBeVisible()
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   test('opens the Ask Flowrite composer from a selection and posts a margin comment in the rail', async () => {
     test.setTimeout(60000)
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-'))

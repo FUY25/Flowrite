@@ -1,37 +1,35 @@
 <template>
-  <aside
-    class="flowrite-annotations"
+  <div
+    class="flowrite-margin-surface"
     data-testid="flowrite-margin-comments"
   >
-    <div class="flowrite-annotations__scroll">
-      <margin-thread-composer
-        v-if="composerMarginThread"
-        :anchor="composerMarginThread.anchor"
-      ></margin-thread-composer>
+    <margin-thread-composer
+      v-if="composerMarginThread"
+      :anchor="composerMarginThread.anchor"
+    ></margin-thread-composer>
 
-      <div
-        ref="threadRail"
-        class="flowrite-annotations__rail"
+    <div
+      ref="threadRail"
+      class="flowrite-margin-surface__threads"
+      :style="{
+        height: `${railHeight}px`
+      }"
+    >
+      <margin-thread-card
+        v-for="thread in positionedThreads"
+        :key="thread.id"
+        :ref="`flowrite-margin-thread-${thread.id}`"
+        :thread="thread"
+        :active="activeMarginThreadId === thread.id"
         :style="{
-          height: `${railHeight}px`
+          top: `${thread.top}px`
         }"
-      >
-        <margin-thread-card
-          v-for="thread in positionedThreads"
-          :key="thread.id"
-          :ref="`flowrite-margin-thread-${thread.id}`"
-          :thread="thread"
-          :active="activeMarginThreadId === thread.id"
-          :style="{
-            top: `${thread.top}px`
-          }"
-          @focus-thread="activateThread"
-          @reply="replyToThread"
-          @size-change="scheduleRefresh"
-        ></margin-thread-card>
-      </div>
+        @focus-thread="activateThread"
+        @reply="replyToThread"
+        @size-change="scheduleRefresh"
+      ></margin-thread-card>
     </div>
-  </aside>
+  </div>
 </template>
 
 <script>
@@ -316,7 +314,6 @@ export default {
 
       this.$nextTick(() => {
         this.syncThreadHeights()
-        this.scrollToActiveThread()
       })
     },
 
@@ -429,50 +426,6 @@ export default {
       return Boolean(thread && thread.resolvedAnchor && thread.resolvedAnchor.status === ANCHOR_DETACHED)
     },
 
-    getScrollContainerRect () {
-      const scrollContainer = this.$el ? this.$el.querySelector('.flowrite-annotations__scroll') : null
-      return scrollContainer ? scrollContainer.getBoundingClientRect() : null
-    },
-
-    getThreadElementOffsetTop (threadElement) {
-      const scrollContainer = this.$el ? this.$el.querySelector('.flowrite-annotations__scroll') : null
-      if (!threadElement || !scrollContainer) {
-        return 0
-      }
-
-      const threadRect = threadElement.getBoundingClientRect()
-      const scrollRect = scrollContainer.getBoundingClientRect()
-      return Math.max(0, threadRect.top - scrollRect.top + scrollContainer.scrollTop)
-    },
-
-    scrollToActiveThread () {
-      if (!this.showAnnotationsPane || !this.activeMarginThreadId || !this.$el) {
-        return
-      }
-
-      const scrollContainer = this.$el.querySelector('.flowrite-annotations__scroll')
-      const threadElement = Array.from(this.$el.querySelectorAll('[data-thread-id]'))
-        .find(element => element.dataset.threadId === this.activeMarginThreadId)
-
-      if (!scrollContainer || !threadElement) {
-        return
-      }
-
-      const visibleTop = scrollContainer.scrollTop
-      const visibleBottom = visibleTop + scrollContainer.clientHeight
-      const threadTop = this.getThreadElementOffsetTop(threadElement)
-      const threadBottom = threadTop + threadElement.offsetHeight
-      const isVisible = threadTop >= visibleTop && threadBottom <= visibleBottom
-
-      if (!isVisible) {
-        const targetTop = Math.max(0, threadTop - 16)
-        scrollContainer.scrollTo({
-          top: targetTop,
-          behavior: 'smooth'
-        })
-      }
-    },
-
     activateThread (threadId) {
       this.$store.dispatch('ACTIVATE_MARGIN_THREAD', threadId)
     },
@@ -515,21 +468,23 @@ export default {
 </script>
 
 <style scoped>
-  .flowrite-annotations {
-    height: 100%;
-    min-width: 0;
-    border-left: 1px solid rgba(28, 33, 44, 0.08);
-    background: color-mix(in srgb, var(--editorBgColor) 97%, white 3%);
-  }
-
-  .flowrite-annotations__scroll {
-    height: 100%;
-    overflow: auto;
+  .flowrite-margin-surface {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(280px, max(248px, 24vw));
     padding: 18px 16px 22px;
+    pointer-events: none;
   }
 
-  .flowrite-annotations__rail {
+  .flowrite-margin-surface__threads {
     position: relative;
     min-height: 100%;
+    pointer-events: auto;
+  }
+
+  .flowrite-margin-surface :deep(.flowrite-margin-thread-composer) {
+    pointer-events: auto;
   }
 </style>

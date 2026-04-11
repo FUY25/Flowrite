@@ -29,14 +29,14 @@
             :editor-root="$el"
             :paragraph-index="marginParagraphIndex"
           ></margin-comment-dots>
+          <margin-comment-layer
+            ref="marginCommentLayer"
+            v-if="showAnnotationsPane"
+            :editor-root="$el"
+            :paragraph-index="marginParagraphIndex"
+          ></margin-comment-layer>
         </div>
       </div>
-      <margin-comment-layer
-        ref="marginCommentLayer"
-        v-if="!sourceCode && showAnnotationsPane"
-        :editor-root="$el"
-        :paragraph-index="marginParagraphIndex"
-      ></margin-comment-layer>
     </div>
     <div
       class="image-viewer"
@@ -1441,20 +1441,12 @@ export default {
   }
 
   .editor-shell {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
     height: 100%;
     min-height: 0;
   }
 
   .editor-shell.annotations-open {
-    grid-template-columns: minmax(0, 1fr) 280px;
-  }
-
-  @media (max-width: 899px) {
-    .editor-shell.annotations-open {
-      grid-template-columns: minmax(0, 1fr) 248px;
-    }
+    min-height: 0;
   }
 
   .editor-main {
