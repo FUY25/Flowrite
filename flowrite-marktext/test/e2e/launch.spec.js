@@ -17,6 +17,12 @@ test.describe('Check Launch MarkText', async () => {
 
   test('Empty MarkText', async () => {
     const title = await page.title()
+    const launchState = await page.evaluate(() => ({
+      hash: window.location.hash,
+      paragraphCount: document.querySelectorAll('#ag-editor-id .ag-paragraph[id]').length
+    }))
     expect(/^MarkText|Untitled-1 - MarkText$/.test(title)).toBeTruthy()
+    expect(launchState.hash).toBe('#/editor')
+    expect(launchState.paragraphCount).toBeGreaterThan(0)
   })
 })

@@ -15,7 +15,7 @@
     "build:clean": "cross-env BUILD_TARGET=clean node .electron-vue/build.js",
     "build:dev": "node .electron-vue/build.js",
     "dev": "cross-env node .electron-vue/dev-runner.js",
-    "e2e": "yarn run pack && cross-env MARKTEXT_EXIT_ON_ERROR=1 playwright test -c test/e2e/playwright.config.js test/e2e",
+    "e2e": "cross-env MARKTEXT_EXIT_ON_ERROR=1 playwright test -c test/e2e/playwright.config.js test/e2e",
     "eval:flowrite": "cross-env BABEL_ENV=test NODE_ENV=test mocha --require dotenv/config --require @babel/register test/evals/flowrite-smoke.spec.js",
     "lint": "eslint --ext .js,.vue -f ./node_modules/eslint-friendly-formatter src test",
     "lint:fix": "eslint --ext .js,.vue -f ./node_modules/eslint-friendly-formatter --fix src test",

@@ -1,4 +1,5 @@
 const config = {
+  globalSetup: require.resolve('./global-setup'),
   workers: 1,
   use: {
     headless: false,

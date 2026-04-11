@@ -18,11 +18,30 @@ const getElectronPath = () => {
   return require('electron')
 }
 
+const getEditorReadyState = async page => {
+  return page.evaluate(() => ({
+    href: window.location.href,
+    hash: window.location.hash,
+    readyState: document.readyState,
+    paragraphCount: document.querySelectorAll('#ag-editor-id .ag-paragraph[id]').length,
+    bodyText: document.body ? document.body.innerText.slice(0, 200) : ''
+  }))
+}
+
+const ensureEditorReady = async (page, options = {}) => {
+  const { timeout = 30000 } = options
+
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForFunction(() => window.location.hash === '#/editor', {}, { timeout })
+  await page.waitForFunction(() => document.querySelectorAll('#ag-editor-id .ag-paragraph[id]').length > 0, {}, { timeout })
+}
+
 const launchElectron = async (userArgs, options = {}) => {
   userArgs = userArgs || []
   const {
     userDataDir = getTempPath(),
-    env = {}
+    env = {},
+    waitForEditor = true
   } = options
   const executablePath = getElectronPath()
   const args = [mainEntrypoint, '--user-data-dir', userDataDir].concat(userArgs)
@@ -41,6 +60,17 @@ const launchElectron = async (userArgs, options = {}) => {
   }
   await page.waitForLoadState('domcontentloaded')
   await new Promise((resolve) => setTimeout(resolve, 500))
+
+  if (waitForEditor) {
+    try {
+      await ensureEditorReady(page)
+    } catch (error) {
+      const details = await getEditorReadyState(page).catch(() => null)
+      const diagnostic = details ? ` ${JSON.stringify(details)}` : ''
+      throw new Error(`Electron app did not initialize the editor window.${diagnostic}`)
+    }
+  }
+
   return { app, page }
 }
 
@@ -75,4 +105,4 @@ const closeElectron = async (app) => {
   }
 }
 
-module.exports = { getElectronPath, launchElectron, closeElectron }
+module.exports = { getElectronPath, launchElectron, closeElectron, ensureEditorReady }

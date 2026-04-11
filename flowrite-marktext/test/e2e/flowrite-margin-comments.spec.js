@@ -219,6 +219,62 @@ test.describe('Flowrite margin comments', () => {
     }
   })
 
+  test('keeps the document scrollable when the integrated margin opens', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-scroll-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+    const filler = Array.from(
+      { length: 18 },
+      (_, index) => `A setup paragraph ${index + 1} that keeps the editor tall enough to require scrolling.`
+    ).join('\n\n')
+
+    await fs.writeFile(articlePath, `# Draft\n\n${filler}\n\nA reflective paragraph with a soft cadence.\n`, 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], { userDataDir })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('A setup paragraph 18'))
+      })
+
+      await selectTextInEditor(page, 'reflective paragraph')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+      await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toBeVisible()
+
+      const scrollMetrics = await page.evaluate(() => {
+        const editor = document.querySelector('.editor-component')
+        if (!editor) {
+          return null
+        }
+
+        editor.scrollTop = 240
+
+        return {
+          clientHeight: editor.clientHeight,
+          scrollHeight: editor.scrollHeight,
+          scrollTop: editor.scrollTop
+        }
+      })
+
+      expect(scrollMetrics).not.toBeNull()
+      expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight + 200)
+      expect(scrollMetrics.scrollTop).toBeGreaterThan(0)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   test('renders an exact highlight for an attached sentence selection', async () => {
     test.setTimeout(60000)
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-highlight-'))
