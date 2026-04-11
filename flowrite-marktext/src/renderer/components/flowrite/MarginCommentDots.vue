@@ -315,6 +315,11 @@ export default {
     },
 
     activateThread (threadId) {
+      if (this.activeMarginThreadId === threadId && this.showAnnotationsPane) {
+        this.$store.dispatch('CLOSE_FLOWRITE_ANNOTATIONS_PANE')
+        return
+      }
+
       this.$store.dispatch('ACTIVATE_MARGIN_THREAD', threadId)
     }
   }
@@ -333,12 +338,12 @@ export default {
     position: absolute;
     right: 10px;
     transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
+    width: 12px;
+    height: 12px;
     padding: 0;
-    border: 1px solid rgba(210, 153, 51, 0.18);
+    border: none;
     border-radius: 999px;
-    background: rgba(255, 251, 244, 0.96);
+    background: transparent;
     box-shadow: none;
     pointer-events: auto;
     cursor: pointer;
@@ -348,15 +353,14 @@ export default {
     display: block;
     width: 8px;
     height: 8px;
-    margin: 3px auto 0;
+    margin: 2px auto 0;
     border-radius: 999px;
     background: rgba(210, 153, 51, 0.82);
     box-shadow: none;
   }
 
   .flowrite-margin-dot.is-active {
-    border-color: rgba(210, 153, 51, 0.28);
-    background: rgba(255, 247, 233, 0.98);
+    background: transparent;
   }
 
   .flowrite-margin-dot.is-active .flowrite-margin-dot__core {

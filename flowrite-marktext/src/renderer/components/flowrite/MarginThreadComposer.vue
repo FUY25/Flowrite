@@ -12,12 +12,11 @@
   >
     <margin-thread-card
       composer
+      :thread="composerThread"
       :positioned="false"
-      :anchor="anchor"
       :submitting="submitting"
       :error="error"
       @submit-composer="submitComposer"
-      @close-composer="closeComposer"
     ></margin-thread-card>
   </div>
 </template>
@@ -40,6 +39,19 @@ export default {
     return {
       submitting: false,
       error: ''
+    }
+  },
+  computed: {
+    composerThread () {
+      return this.anchor
+        ? {
+          id: 'flowrite-margin-thread-composer',
+          scope: SCOPE_MARGIN,
+          anchor: this.anchor,
+          comments: [],
+          collapsed: false
+        }
+        : null
     }
   },
   watch: {
@@ -143,10 +155,6 @@ export default {
           this.submitting = false
         }
       }
-    },
-
-    closeComposer () {
-      this.$store.dispatch('CLOSE_FLOWRITE_MARGIN_COMPOSER')
     }
   }
 }

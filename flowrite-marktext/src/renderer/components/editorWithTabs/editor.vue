@@ -848,8 +848,31 @@ export default {
         return
       }
 
-      this.marginParagraphObserver = new MutationObserver(() => {
-        this.scheduleMarginParagraphIndexRefresh()
+      this.marginParagraphObserver = new MutationObserver(mutations => {
+        const overlayHost = this.$refs.marginOverlays
+        const shouldRefresh = mutations.some(mutation => {
+          const target = mutation.target
+          const targetNode = target && target.nodeType === Node.TEXT_NODE ? target.parentNode : target
+          if (overlayHost && targetNode && typeof overlayHost.contains === 'function' && overlayHost.contains(targetNode)) {
+            return false
+          }
+
+          const changedNodes = [
+            ...(mutation.addedNodes ? Array.from(mutation.addedNodes) : []),
+            ...(mutation.removedNodes ? Array.from(mutation.removedNodes) : [])
+          ]
+
+          return changedNodes.every(node => {
+            if (!overlayHost || !node || typeof overlayHost.contains !== 'function') {
+              return true
+            }
+            return !overlayHost.contains(node)
+          })
+        })
+
+        if (shouldRefresh) {
+          this.scheduleMarginParagraphIndexRefresh()
+        }
       })
 
       this.marginParagraphObserver.observe(editorRoot, {
@@ -1503,11 +1526,13 @@ export default {
 
   ::highlight(flowrite-margin-anchor-active) {
     background-color: rgba(210, 153, 51, 0.10);
+    color: inherit;
     text-decoration-line: underline;
     text-decoration-style: solid;
-    text-decoration-color: rgba(210, 153, 51, 0.72);
+    text-decoration-color: rgba(210, 153, 51, 0.52);
     text-decoration-thickness: 1px;
-    text-underline-offset: 0.14em;
+    text-decoration-skip-ink: none;
+    text-underline-offset: 0.12em;
   }
 
   .typewriter .editor-component {

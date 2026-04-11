@@ -1,6 +1,6 @@
 <template>
   <article
-    v-if="thread || composer"
+    v-if="thread"
     class="flowrite-margin-thread-card"
     :class="[
       {
@@ -15,17 +15,6 @@
     @click="handleCardClick"
   >
     <div class="flowrite-margin-thread-card__surface">
-      <button
-        v-if="composer"
-        type="button"
-        class="flowrite-margin-thread-card__composer-close"
-        data-testid="flowrite-margin-thread-close"
-        aria-label="Close Ask Flowrite composer"
-        @click.stop="closeComposer"
-      >
-        ×
-      </button>
-
       <div
         v-if="isDetached && !composer"
         class="flowrite-margin-thread-card__detached"
@@ -102,13 +91,6 @@
             {{ foldButtonLabel }}
           </button>
         </div>
-
-        <p
-          v-if="composer && displayAnchor && displayAnchor.quote"
-          class="flowrite-margin-thread-card__quote"
-        >
-          {{ displayAnchor.quote }}
-        </p>
       </div>
 
       <div
@@ -127,8 +109,10 @@
             rows="1"
             :disabled="isInputPending"
             @input="syncReplyInputHeight"
+            @keydown.enter.exact.prevent="submitInput"
             @keydown.meta.enter.prevent="submitInput"
             @keydown.ctrl.enter.prevent="submitInput"
+            @keydown.esc.prevent="handleEscape"
           ></textarea>
           <button
             type="button"
@@ -165,10 +149,6 @@ export default {
       type: Boolean,
       default: false
     },
-    anchor: {
-      type: Object,
-      default: null
-    },
     composer: {
       type: Boolean,
       default: false
@@ -192,6 +172,8 @@ export default {
       isReplyPending: false,
       isExpanded: false,
       showReplyInput: false,
+      replyHeightRafId: null,
+      lastReplyInputHeight: 24,
       lastThreadId: null,
       lastCollapsedState: false
     }
@@ -215,14 +197,6 @@ export default {
       }
 
       return Array.isArray(this.thread && this.thread.comments) ? this.thread.comments : []
-    },
-
-    displayAnchor () {
-      if (this.anchor) {
-        return this.anchor
-      }
-
-      return this.thread && this.thread.anchor ? this.thread.anchor : null
     },
 
     isCompressed () {
@@ -319,6 +293,12 @@ export default {
       }
     }
   },
+  beforeDestroy () {
+    if (this.replyHeightRafId) {
+      window.cancelAnimationFrame(this.replyHeightRafId)
+      this.replyHeightRafId = null
+    }
+  },
   methods: {
     handleCardClick () {
       if (this.composer) {
@@ -339,6 +319,7 @@ export default {
       }
 
       this.showReplyInput = true
+      this.$store.dispatch('ACTIVATE_MARGIN_THREAD', this.thread.id)
       this.$emit('focus-thread', this.thread.id)
       this.$nextTick(() => {
         if (this.$refs.replyInput) {
@@ -363,7 +344,7 @@ export default {
           await new Promise((resolve, reject) => {
             this.$emit('submit-composer', {
               body,
-              anchor: this.displayAnchor,
+              anchor: this.thread && this.thread.anchor ? this.thread.anchor : null,
               resolve,
               reject
             })
@@ -403,15 +384,50 @@ export default {
       this.$emit('close-composer')
     },
 
+    handleEscape () {
+      if (this.isInputPending) {
+        return
+      }
+
+      this.replyDraft = ''
+      this.$nextTick(() => {
+        this.syncReplyInputHeight()
+      })
+
+      if (this.composer) {
+        this.closeComposer()
+        return
+      }
+
+      this.showReplyInput = false
+    },
+
     syncReplyInputHeight () {
       const input = this.$refs.replyInput
       if (!input) {
         return
       }
 
-      input.style.height = '0px'
-      const nextHeight = Math.max(24, Math.min(input.scrollHeight, 132))
-      input.style.height = `${nextHeight}px`
+      if (this.replyHeightRafId) {
+        window.cancelAnimationFrame(this.replyHeightRafId)
+      }
+
+      this.replyHeightRafId = window.requestAnimationFrame(() => {
+        this.replyHeightRafId = null
+        if (!this.$refs.replyInput) {
+          return
+        }
+
+        input.style.height = 'auto'
+        const nextHeight = Math.max(24, Math.min(input.scrollHeight, 132))
+        if (Math.abs(nextHeight - this.lastReplyInputHeight) > 1) {
+          input.style.height = `${nextHeight}px`
+          this.lastReplyInputHeight = nextHeight
+          return
+        }
+
+        input.style.height = `${this.lastReplyInputHeight}px`
+      })
     },
 
     toggleCompression () {
@@ -469,20 +485,6 @@ export default {
     cursor: pointer;
   }
 
-  .flowrite-margin-thread-card__composer-close {
-    appearance: none;
-    position: absolute;
-    top: 12px;
-    right: 14px;
-    border: none;
-    background: transparent;
-    color: rgba(124, 130, 140, 0.92);
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 1;
-    padding: 0;
-  }
-
   .flowrite-margin-thread-card.is-active .flowrite-margin-thread-card__surface {
     border-color: rgba(210, 153, 51, 0.26);
     box-shadow: 0 12px 26px rgba(26, 33, 44, 0.08);
@@ -533,14 +535,6 @@ export default {
     position: relative;
   }
 
-  .flowrite-margin-thread-card__quote {
-    margin: 0;
-    color: rgba(124, 130, 140, 0.92);
-    font-size: 13px;
-    line-height: 1.5;
-    padding-right: 20px;
-  }
-
   .flowrite-margin-thread-card__spine {
     position: absolute;
     top: 16px;
@@ -584,6 +578,13 @@ export default {
   .flowrite-margin-thread-card__copy {
     min-width: 0;
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .flowrite-margin-thread-card__comment-meta {
+    line-height: 1.2;
   }
 
   .flowrite-margin-thread-card__author {
@@ -593,10 +594,10 @@ export default {
   }
 
   .flowrite-margin-thread-card__body {
-    margin: 6px 0 0;
+    margin: 0;
     white-space: pre-wrap;
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.45;
     color: rgba(44, 49, 58, 0.92);
   }
 
