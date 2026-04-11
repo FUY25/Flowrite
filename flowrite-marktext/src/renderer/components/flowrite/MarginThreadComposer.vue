@@ -12,7 +12,7 @@
   >
     <div class="flowrite-margin-composer__surface">
       <div class="flowrite-margin-composer__header">
-        <p class="flowrite-margin-composer__eyebrow">
+        <p class="flowrite-margin-composer__title">
           Ask Flowrite
         </p>
         <button
@@ -197,11 +197,11 @@ export default {
   .flowrite-margin-composer__surface {
     position: relative;
     z-index: 2;
-    border: 1px solid rgba(36, 42, 53, 0.12);
+    border: 1px solid rgba(52, 60, 72, 0.11);
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 12px 28px rgba(26, 33, 44, 0.08);
-    padding: 14px;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 8px 22px rgba(26, 33, 44, 0.06);
+    padding: 14px 16px;
   }
 
   .flowrite-margin-composer__header,
@@ -212,21 +212,19 @@ export default {
     gap: 10px;
   }
 
-  .flowrite-margin-composer__eyebrow {
+  .flowrite-margin-composer__title {
     margin: 0;
-    color: rgba(74, 86, 104, 0.82);
-    font-size: 11px;
+    color: rgba(44, 49, 58, 0.92);
+    font-size: 13px;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
 
   .flowrite-margin-composer__close {
     appearance: none;
-    border: 1px solid rgba(36, 42, 53, 0.12);
+    border: 1px solid rgba(221, 225, 232, 0.96);
     border-radius: 999px;
-    background: rgba(247, 248, 250, 0.96);
-    color: rgba(74, 86, 104, 0.82);
+    background: rgba(248, 249, 251, 0.98);
+    color: rgba(116, 123, 136, 0.88);
     cursor: pointer;
     font-size: 14px;
     line-height: 1;
@@ -235,25 +233,26 @@ export default {
 
   .flowrite-margin-composer__quote {
     margin: 10px 0 12px;
-    color: rgba(39, 49, 66, 0.92);
+    color: rgba(116, 123, 136, 0.88);
     font-size: 13px;
     line-height: 1.5;
   }
 
   .flowrite-margin-composer__input {
     width: 100%;
-    border: 1px solid rgba(36, 42, 53, 0.12);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(221, 225, 232, 0.96);
+    border-radius: 14px;
+    background: rgba(248, 249, 251, 0.98);
     color: var(--editorColor);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.5;
-    padding: 10px 12px;
+    min-height: 88px;
+    padding: 11px 13px;
     resize: vertical;
   }
 
   .flowrite-margin-composer__input:focus {
-    border-color: rgba(79, 101, 131, 0.34);
+    border-color: rgba(210, 153, 51, 0.34);
     outline: none;
   }
 
@@ -271,17 +270,17 @@ export default {
 
   .flowrite-margin-composer__submit {
     appearance: none;
-    border: 1px solid rgba(36, 42, 53, 0.12);
+    border: 1px solid rgba(210, 153, 51, 0.2);
     border-radius: 999px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     padding: 8px 14px;
   }
 
   .flowrite-margin-composer__submit {
-    background: rgba(239, 243, 247, 0.96);
-    color: #1f2937;
+    background: rgba(247, 240, 224, 0.98);
+    color: rgba(106, 79, 24, 0.96);
   }
 
   .flowrite-margin-composer__submit:disabled {

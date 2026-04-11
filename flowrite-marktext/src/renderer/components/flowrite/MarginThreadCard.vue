@@ -13,39 +13,19 @@
     @click="focusThread"
   >
     <div class="flowrite-margin-thread-card__surface">
-      <div class="flowrite-margin-thread-card__header">
-        <div class="flowrite-margin-thread-card__heading">
-          <p class="flowrite-margin-thread-card__eyebrow">
-            Margin thread
-          </p>
-          <p
-            v-if="thread.anchor && thread.anchor.quote"
-            class="flowrite-margin-thread-card__quote"
-            data-testid="flowrite-margin-thread-quote"
-          >
-            "{{ thread.anchor.quote }}"
-          </p>
-        </div>
-
-        <button
-          type="button"
-          class="flowrite-margin-thread-card__focus"
-          data-testid="flowrite-margin-thread-focus"
-          @click.stop="focusThread"
-        >
-          {{ active ? 'Focused' : 'Open' }}
-        </button>
+      <div
+        v-if="isDetached"
+        class="flowrite-margin-thread-card__detached"
+      >
+        Detached
       </div>
 
-      <div class="flowrite-margin-thread-card__meta">
+      <div class="flowrite-margin-thread-card__meta flowrite-margin-thread-card__meta--sr-only">
         <span
           class="flowrite-margin-thread-card__status"
           data-testid="flowrite-margin-thread-status"
         >
           {{ isDetached ? 'Detached' : 'Attached' }}
-        </span>
-        <span class="flowrite-margin-thread-card__timestamp">
-          {{ formatTimestamp(thread.updatedAt) }}
         </span>
       </div>
 
@@ -63,7 +43,7 @@
           }"
         >
           <div
-            v-for="comment in visibleComments"
+            v-for="(comment, commentIndex) in visibleComments"
             :key="comment.id"
             class="flowrite-margin-thread-card__comment"
             :class="`author-${comment.author}`"
@@ -87,12 +67,22 @@
                 {{ comment.body }}
               </p>
             </div>
+
+            <button
+              v-if="isCollapsed && hiddenCommentCount > 0 && commentIndex === 0"
+              type="button"
+              class="flowrite-margin-thread-card__fold"
+              data-testid="flowrite-margin-thread-fold"
+              @click.stop="toggleCompression"
+            >
+              {{ foldButtonLabel }}
+            </button>
           </div>
 
           <button
-            v-if="isCompressed"
+            v-if="isCompressed && !isCollapsed"
             type="button"
-            class="flowrite-margin-thread-card__fold"
+            class="flowrite-margin-thread-card__fold flowrite-margin-thread-card__fold--expanded"
             data-testid="flowrite-margin-thread-fold"
             @click.stop="toggleCompression"
           >
@@ -168,7 +158,14 @@ export default {
         return this.comments
       }
 
-      return this.comments.slice(0, 2)
+      if (this.comments.length <= 2) {
+        return this.comments
+      }
+
+      return [
+        this.comments[0],
+        this.comments[this.comments.length - 1]
+      ]
     },
 
     hiddenCommentCount () {
@@ -185,7 +182,7 @@ export default {
       }
 
       if (this.hiddenCommentCount > 0) {
-        return `Show ${this.hiddenCommentCount} more`
+        return `Show ${this.hiddenCommentCount} replies`
       }
 
       return 'Expand thread'
@@ -291,108 +288,86 @@ export default {
   }
 
   .flowrite-margin-thread-card__surface {
-    border: 1px solid rgba(37, 43, 54, 0.11);
+    position: relative;
+    border: 1px solid rgba(52, 60, 72, 0.11);
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.84);
-    box-shadow: 0 12px 28px rgba(26, 33, 44, 0.08);
-    padding: 14px 14px 12px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 8px 22px rgba(26, 33, 44, 0.06);
+    padding: 14px 16px 14px;
     cursor: pointer;
   }
 
   .flowrite-margin-thread-card.is-active .flowrite-margin-thread-card__surface {
-    border-color: rgba(74, 118, 163, 0.24);
-    box-shadow: 0 16px 34px rgba(42, 66, 95, 0.12);
+    border-color: rgba(210, 153, 51, 0.26);
+    box-shadow: 0 12px 26px rgba(26, 33, 44, 0.08);
   }
 
   .flowrite-margin-thread-card.is-detached .flowrite-margin-thread-card__surface {
     border-style: dashed;
   }
 
-  .flowrite-margin-thread-card__header,
   .flowrite-margin-thread-card__meta,
   .flowrite-margin-thread-card__comment-meta {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
   }
 
-  .flowrite-margin-thread-card__heading {
-    min-width: 0;
-  }
-
-  .flowrite-margin-thread-card__eyebrow {
-    margin: 0;
-    color: rgba(74, 86, 104, 0.82);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .flowrite-margin-thread-card__quote {
-    margin: 5px 0 0;
-    color: rgba(39, 49, 66, 0.92);
-    font-size: 13px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-  }
-
-  .flowrite-margin-thread-card__focus {
-    flex-shrink: 0;
-    appearance: none;
-    border: 1px solid rgba(36, 42, 53, 0.12);
+  .flowrite-margin-thread-card__detached {
+    position: absolute;
+    top: 12px;
+    right: 14px;
     border-radius: 999px;
-    background: rgba(247, 248, 250, 0.96);
-    color: rgba(39, 49, 66, 0.82);
-    cursor: pointer;
-    font-size: 12px;
+    background: rgba(242, 244, 247, 0.98);
+    color: rgba(108, 121, 139, 0.92);
+    font-size: 11px;
     font-weight: 600;
-    padding: 7px 12px;
+    line-height: 1;
+    padding: 5px 8px;
   }
 
   .flowrite-margin-thread-card__meta {
-    margin-top: 10px;
-    justify-content: flex-start;
-    color: rgba(74, 86, 104, 0.78);
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    border: 0;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
   }
 
-  .flowrite-margin-thread-card__status,
-  .flowrite-margin-thread-card__timestamp,
-  .flowrite-margin-thread-card__comment-time {
+  .flowrite-margin-thread-card__comment-time,
+  .flowrite-margin-thread-card__status {
     font-size: 11px;
+    color: rgba(116, 123, 136, 0.78);
   }
 
   .flowrite-margin-thread-card__thread {
     position: relative;
-    margin-top: 12px;
   }
 
   .flowrite-margin-thread-card__spine {
     position: absolute;
-    top: 14px;
-    bottom: 14px;
-    left: 13px;
+    top: 16px;
+    bottom: 16px;
+    left: 14px;
     width: 1px;
-    background: rgba(210, 153, 51, 0.24);
+    background: rgba(194, 199, 208, 0.66);
   }
 
   .flowrite-margin-thread-card__comments {
     position: relative;
   }
 
-  .flowrite-margin-thread-card__comments.is-collapsed {
-    margin-top: 10px;
-  }
-
   .flowrite-margin-thread-card__comment {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
   }
 
   .flowrite-margin-thread-card__comment + .flowrite-margin-thread-card__comment {
-    margin-top: 12px;
+    margin-top: 16px;
   }
 
   .flowrite-margin-thread-card__avatar {
@@ -401,33 +376,34 @@ export default {
     width: 28px;
     height: 28px;
     border-radius: 999px;
-    background: rgba(249, 246, 239, 0.98);
-    border: 1px solid rgba(210, 153, 51, 0.18);
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(217, 222, 230, 0.96);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     font-size: 11px;
     font-weight: 700;
-    color: rgba(108, 80, 28, 0.9);
+    color: rgba(120, 126, 138, 0.88);
   }
 
   .flowrite-margin-thread-card__copy {
     min-width: 0;
+    flex: 1;
   }
 
   .flowrite-margin-thread-card__author {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: 700;
     color: var(--editorColor80);
   }
 
   .flowrite-margin-thread-card__body {
-    margin: 4px 0 0;
+    margin: 6px 0 0;
     white-space: pre-wrap;
-    font-size: 13px;
-    line-height: 1.55;
-    color: var(--editorColor80);
+    font-size: 14px;
+    line-height: 1.5;
+    color: rgba(44, 49, 58, 0.92);
   }
 
   .flowrite-margin-thread-card__comments.is-collapsed .flowrite-margin-thread-card__body {
@@ -441,38 +417,44 @@ export default {
     appearance: none;
     border: none;
     background: transparent;
-    color: rgba(74, 86, 104, 0.86);
+    color: rgba(126, 132, 145, 0.92);
     cursor: pointer;
     display: inline-flex;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
-    margin-top: 10px;
-    padding: 0 0 0 38px;
+    margin: 10px 0 2px 40px;
+    padding: 0;
   }
 
   .flowrite-margin-thread-card__fold:hover {
-    color: rgba(39, 49, 66, 0.96);
+    color: rgba(83, 89, 103, 0.96);
+  }
+
+  .flowrite-margin-thread-card__fold--expanded {
+    margin-top: 14px;
   }
 
   .flowrite-margin-thread-card__reply {
-    margin-top: 12px;
+    margin-top: 14px;
+    border-top: 1px solid rgba(228, 231, 237, 0.96);
+    padding-top: 12px;
   }
 
   .flowrite-margin-thread-card__reply-input {
     width: 100%;
-    border: 1px solid rgba(36, 42, 53, 0.12);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(221, 225, 232, 0.96);
+    border-radius: 14px;
+    background: rgba(248, 249, 251, 0.98);
     color: var(--editorColor);
     font-size: 13px;
     line-height: 1.5;
-    min-height: 72px;
-    padding: 10px 12px;
+    min-height: 58px;
+    padding: 11px 13px;
     resize: vertical;
   }
 
   .flowrite-margin-thread-card__reply-input:focus {
-    border-color: rgba(79, 101, 131, 0.34);
+    border-color: rgba(210, 153, 51, 0.34);
     outline: none;
   }
 

@@ -223,6 +223,28 @@ describe('Flowrite renderer store', function () {
     expect(store.state.flowrite.showAnnotationsPane).to.equal(true)
   })
 
+  it('activates an existing margin thread and opens the integrated margin surface without resurrecting the composer', async function () {
+    const store = createStore()
+
+    store.state.flowrite.comments = [{
+      id: 'thread-margin-1',
+      scope: 'margin',
+      status: 'open',
+      comments: [{
+        id: 'comment-1',
+        author: 'user',
+        body: 'Keep this visible.'
+      }]
+    }]
+
+    await store.dispatch('ACTIVATE_MARGIN_THREAD', 'thread-margin-1')
+
+    expect(store.state.flowrite.activeMarginThreadId).to.equal('thread-margin-1')
+    expect(store.state.flowrite.highlightedMarginThreadIds).to.deep.equal(['thread-margin-1'])
+    expect(store.state.flowrite.showAnnotationsPane).to.equal(true)
+    expect(store.state.flowrite.composerMarginThread).to.equal(null)
+  })
+
   it('preserves the original pane provenance across repeated composer openings before cancel', async function () {
     const store = createStore()
 

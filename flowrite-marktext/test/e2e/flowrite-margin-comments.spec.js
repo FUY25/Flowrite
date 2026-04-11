@@ -168,8 +168,9 @@ test.describe('Flowrite margin comments', () => {
 
       await waitForRendererIdle(page)
       await page.waitForFunction(() => {
-        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
-          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+        const paragraphs = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+        return paragraphs.some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence')) &&
+          paragraphs.some(node => (node.textContent || '').includes('sharper note'))
       })
 
       await selectTextRangeInEditor(page, 'reflective paragraph', 'sharper note')
@@ -504,14 +505,18 @@ test.describe('Flowrite margin comments', () => {
 
       await expect(marginRail).toBeVisible()
       await expect(page.locator('[data-testid="flowrite-margin-thread"]')).toHaveCount(1)
+      await expect(page.locator('[data-testid="flowrite-margin-thread-reply-input"]')).toHaveCount(0)
+      await expect(page.locator('[data-testid="flowrite-margin-dot"]')).toHaveCount(1)
+      await expect(page.locator('[data-testid="flowrite-margin-highlight"]')).toHaveCount(0)
 
       await page.setViewportSize({ width: 1240, height: 720 })
       await expect(sideBar).toBeHidden()
 
       const firstThread = page.locator('[data-testid="flowrite-margin-thread"]').first()
-      await expect(firstThread).toContainText('reflective paragraph')
       await expect(firstThread).toContainText('Can you sharpen this passage?')
       await expect(firstThread.locator('[data-testid="flowrite-margin-thread-status"]')).toContainText('Attached')
+      await firstThread.click()
+      await expect(page.locator('[data-testid="flowrite-margin-thread-reply-input"]')).toHaveCount(1)
 
       const geometry = await page.evaluate(() => {
         const paragraph = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
@@ -530,7 +535,7 @@ test.describe('Flowrite margin comments', () => {
         }
       })
 
-      expect(geometry).to.not.equal(null)
+      expect(geometry).not.toBeNull()
       expect(geometry.verticalDelta).toBeLessThanOrEqual(28)
       expect(geometry.horizontalDelta).toBeGreaterThan(24)
     } finally {

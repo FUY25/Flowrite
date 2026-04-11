@@ -228,7 +228,6 @@ test.describe('Flowrite detached margin comments', () => {
       await page.locator('[data-testid="flowrite-margin-thread-submit"]').click({ force: true })
 
       const thread = page.locator('[data-testid="flowrite-margin-thread"]').first()
-      await expect(thread).toContainText('reflective paragraph')
       await expect(thread).toContainText('Keep track of this thought.')
       await expect(thread.locator('[data-testid="flowrite-margin-thread-status"]')).toContainText('Attached')
 

@@ -1449,6 +1449,10 @@ export default {
     min-height: 0;
   }
 
+  .editor-shell.annotations-open .editor-component {
+    padding-right: min(312px, max(272px, 26vw));
+  }
+
   .editor-main {
     position: relative;
     min-width: 0;
