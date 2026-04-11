@@ -1,0 +1,26 @@
+.ag-float-wrapper.ag-flowrite-selection-menu-container {
+  box-shadow: none;
+  background: transparent;
+}
+
+.ag-flowrite-selection-menu .ag-flowrite-selection-menu__button {
+  appearance: none;
+  border: 1px solid rgba(37, 43, 54, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #273142;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 8px 12px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.ag-flowrite-selection-menu .ag-flowrite-selection-menu__button:hover,
+.ag-flowrite-selection-menu .ag-flowrite-selection-menu__button:focus {
+  border-color: rgba(37, 43, 54, 0.22);
+  box-shadow: 0 8px 24px rgba(25, 35, 52, 0.12);
+  outline: none;
+  transform: translateY(-1px);
+}
