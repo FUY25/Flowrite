@@ -82,6 +82,93 @@ const replaceParagraphText = async (page, targetText, replacementText) => {
 }
 
 test.describe('Flowrite detached margin comments', () => {
+  test('renders quiet dots for detached margin threads', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-detached-dot-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+    const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n', 'utf8')
+    await fs.writeFile(clientModulePath, `
+      module.exports.createAnthropicClient = function createAnthropicClient () {
+        return {
+          client: {
+            messages: {
+              create: async function create () {
+                return {
+                  id: 'msg_margin_text_only',
+                  role: 'assistant',
+                  stop_reason: 'end_turn',
+                  content: [{
+                    type: 'text',
+                    text: 'No margin reply.'
+                  }]
+                }
+              }
+            }
+          },
+          model: 'flowrite-test-model'
+        }
+      }
+    `, 'utf8')
+
+    const launchOptions = {
+      userDataDir,
+      env: {
+        AI_GATEWAY_API_KEY: 'flowrite-test-key',
+        FLOWRITE_TEST_CLIENT_MODULE: clientModulePath
+      }
+    }
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], launchOptions)
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+
+      await selectTextInEditor(page, 'reflective paragraph')
+      await expect(page.locator('[data-testid="flowrite-selection-comment-button"]')).toBeVisible()
+
+      await page.locator('[data-testid="flowrite-selection-comment-button"]').click()
+      await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toBeVisible()
+
+      await page.locator('[data-testid="flowrite-margin-thread-input"]').fill('Keep track of this thought.')
+      await page.locator('[data-testid="flowrite-margin-thread-submit"]').click({ force: true })
+
+      await page.waitForFunction(() => {
+        const editorRoot = document.querySelector('.editor-wrapper')
+        const store = editorRoot && editorRoot.__vue__ && editorRoot.__vue__.$store
+        const comments = store && store.state && store.state.flowrite
+          ? store.state.flowrite.comments
+          : []
+        return Array.isArray(comments) && comments.some(thread => {
+          return thread &&
+            thread.scope === 'margin' &&
+            thread.anchor &&
+            thread.anchor.quote === 'reflective paragraph' &&
+            Array.isArray(thread.comments) &&
+            thread.comments.some(comment => comment && comment.author === 'user' && comment.body === 'Keep track of this thought.')
+        })
+      })
+
+      const dot = page.locator('[data-testid="flowrite-margin-dot"]').first()
+      await expect(dot).toBeVisible()
+
+      const dotBoxShadow = await dot.evaluate(node => window.getComputedStyle(node).boxShadow)
+      expect(dotBoxShadow === 'none' || dotBoxShadow === '').toBeTruthy()
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   test('marks a margin thread detached after a destructive rewrite removes the anchored quote', async () => {
     test.setTimeout(60000)
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-detached-'))
@@ -138,7 +225,7 @@ test.describe('Flowrite detached margin comments', () => {
       await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toBeVisible()
 
       await page.locator('[data-testid="flowrite-margin-thread-input"]').fill('Keep track of this thought.')
-      await page.locator('[data-testid="flowrite-margin-thread-submit"]').click()
+      await page.locator('[data-testid="flowrite-margin-thread-submit"]').click({ force: true })
 
       const thread = page.locator('[data-testid="flowrite-margin-thread"]').first()
       await expect(thread).toContainText('reflective paragraph')

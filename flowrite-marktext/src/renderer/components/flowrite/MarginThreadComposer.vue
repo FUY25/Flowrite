@@ -189,9 +189,14 @@ export default {
 <style scoped>
   .flowrite-margin-composer {
     margin: 0 0 14px;
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
   }
 
   .flowrite-margin-composer__surface {
+    position: relative;
+    z-index: 2;
     border: 1px solid rgba(36, 42, 53, 0.12);
     border-radius: 18px;
     background: rgba(255, 255, 255, 0.9);

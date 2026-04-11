@@ -88,6 +88,7 @@ export default {
   computed: {
     ...mapState({
       comments: state => state.flowrite.comments,
+      composerMarginThread: state => state.flowrite.composerMarginThread,
       markdown: state => (state.editor.currentFile ? state.editor.currentFile.markdown || '' : ''),
       showAnnotationsPane: state => state.flowrite.showAnnotationsPane,
       activeMarginThreadId: state => state.flowrite.activeMarginThreadId,
@@ -98,6 +99,14 @@ export default {
       return Array.isArray(this.comments)
         ? this.comments.filter(thread => thread && thread.scope === SCOPE_MARGIN)
         : []
+    },
+
+    renderedThreads () {
+      const threads = this.marginThreads.slice()
+      if (this.composerMarginThread && this.composerMarginThread.scope === SCOPE_MARGIN) {
+        threads.push(this.composerMarginThread)
+      }
+      return threads
     },
 
     highlightedThreadIds () {
@@ -126,6 +135,12 @@ export default {
     },
     showAnnotationsPane () {
       this.scheduleRefresh()
+    },
+    composerMarginThread: {
+      deep: true,
+      handler () {
+        this.scheduleRefresh()
+      }
     },
     activeMarginThreadId () {
       this.scheduleRefresh()
@@ -242,7 +257,9 @@ export default {
           : []
         const fallbackRects = clientRects.length
           ? clientRects
-          : (paragraph && paragraph.element ? [paragraph.element.getBoundingClientRect()] : [])
+          : resolution.status === ANCHOR_DETACHED && paragraph && paragraph.element
+            ? [paragraph.element.getBoundingClientRect()]
+            : []
 
         fallbackRects.forEach((rect, rectIndex) => {
           if (!rect) {
@@ -273,7 +290,7 @@ export default {
       }
 
       const paragraphIndex = this.getParagraphIndex()
-      const threads = this.marginThreads
+      const threads = this.renderedThreads
         .filter(thread => this.highlightedThreadIds.has(thread.id))
         .map(thread => resolveMarginThread(thread, paragraphIndex.list))
 
@@ -347,9 +364,8 @@ export default {
   .flowrite-margin-highlight {
     position: absolute;
     border-radius: 999px;
-    background: rgba(240, 192, 78, 0.22);
-    border-bottom: 2px solid rgba(225, 166, 53, 0.86);
-    box-shadow: 0 0 0 1px rgba(225, 166, 53, 0.08);
+    background: linear-gradient(to top, rgba(210, 153, 51, 0.18) 0, rgba(210, 153, 51, 0.18) 42%, transparent 42%);
+    border-bottom: 2px solid rgba(210, 153, 51, 0.72);
   }
 
   .flowrite-margin-highlight.is-detached {

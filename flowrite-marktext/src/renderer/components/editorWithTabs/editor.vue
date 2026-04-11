@@ -1460,6 +1460,7 @@ export default {
     inset: 0;
     overflow: hidden;
     pointer-events: none;
+    z-index: 4;
   }
 
   .typewriter .editor-component {

@@ -370,10 +370,10 @@ export default {
     width: 16px;
     height: 16px;
     padding: 0;
-    border: 1px solid rgba(40, 47, 60, 0.16);
+    border: 1px solid rgba(210, 153, 51, 0.18);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 2px 10px rgba(26, 33, 44, 0.08);
+    background: rgba(255, 251, 244, 0.96);
+    box-shadow: none;
     pointer-events: auto;
     cursor: pointer;
   }
@@ -384,16 +384,17 @@ export default {
     height: 8px;
     margin: 3px auto 0;
     border-radius: 999px;
-    background: rgba(67, 87, 113, 0.68);
+    background: rgba(210, 153, 51, 0.82);
+    box-shadow: none;
   }
 
   .flowrite-margin-dot.is-active {
-    border-color: rgba(74, 118, 163, 0.42);
-    background: rgba(229, 239, 250, 0.98);
+    border-color: rgba(210, 153, 51, 0.28);
+    background: rgba(255, 247, 233, 0.98);
   }
 
   .flowrite-margin-dot.is-active .flowrite-margin-dot__core {
-    background: rgba(65, 105, 150, 0.92);
+    background: rgba(210, 153, 51, 0.96);
   }
 
   .flowrite-margin-dot.is-detached {

@@ -473,6 +473,7 @@ export default {
     top: 0;
     right: 0;
     bottom: 0;
+    z-index: 4;
     width: min(280px, max(248px, 24vw));
     padding: 18px 16px 22px;
     pointer-events: none;

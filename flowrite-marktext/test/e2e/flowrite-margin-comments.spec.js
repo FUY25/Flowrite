@@ -218,6 +218,61 @@ test.describe('Flowrite margin comments', () => {
     }
   })
 
+  test('renders an exact highlight for an attached sentence selection', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-highlight-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence and a closing phrase for contrast.\n\nA later paragraph that lands with a sharper note.\n', 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], { userDataDir })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await selectTextInEditor(page, 'soft cadence')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+      await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toBeVisible()
+      await expect(page.locator('[data-testid="flowrite-margin-highlight"]')).toHaveCount(1)
+
+      const geometry = await page.evaluate(() => {
+        const paragraph = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .find(node => (node.textContent || '').includes('soft cadence and a closing phrase'))
+        const highlight = document.querySelector('[data-testid="flowrite-margin-highlight"]')
+
+        if (!paragraph || !highlight) {
+          return null
+        }
+
+        const paragraphRect = paragraph.getBoundingClientRect()
+        const highlightRect = highlight.getBoundingClientRect()
+        return {
+          paragraphWidth: paragraphRect.width,
+          highlightWidth: highlightRect.width
+        }
+      })
+
+      expect(geometry).not.toBeNull()
+      expect(geometry.highlightWidth).toBeLessThan(geometry.paragraphWidth)
+      expect(geometry.highlightWidth).toBeGreaterThan(40)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   test('opens the Ask Flowrite composer from a selection and posts a margin comment in the rail', async () => {
     test.setTimeout(60000)
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-'))
