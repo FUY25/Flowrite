@@ -6,7 +6,8 @@
 import { mapState } from 'vuex'
 import { resolveMarginThread } from '../../../flowrite/anchors'
 import { SCOPE_MARGIN, ANCHOR_DETACHED } from '../../../flowrite/constants'
-const HIGHLIGHT_NAME = 'flowrite-margin-anchor-active'
+const ACTIVE_HIGHLIGHT_NAME = 'flowrite-margin-anchor-active'
+const UNDERLINE_HIGHLIGHT_NAME = 'flowrite-margin-anchor-underline'
 
 const supportsCssHighlights = () => {
   return typeof window !== 'undefined' &&
@@ -255,25 +256,22 @@ export default {
 
     clearNativeHighlights () {
       if (supportsCssHighlights()) {
-        CSS.highlights.delete(HIGHLIGHT_NAME)
+        CSS.highlights.delete(ACTIVE_HIGHLIGHT_NAME)
+        CSS.highlights.delete(UNDERLINE_HIGHLIGHT_NAME)
       }
     },
 
-    applyNativeHighlights (threadRanges) {
+    setNativeHighlight (name, ranges) {
       if (!supportsCssHighlights()) {
         return false
       }
 
-      const attachedRanges = threadRanges
-        .filter(entry => !entry.detached)
-        .map(entry => entry.range)
-
-      if (!attachedRanges.length) {
-        this.clearNativeHighlights()
+      if (!ranges.length) {
+        CSS.highlights.delete(name)
         return true
       }
 
-      CSS.highlights.set(HIGHLIGHT_NAME, new window.Highlight(...attachedRanges))
+      CSS.highlights.set(name, new window.Highlight(...ranges))
       return true
     },
 
@@ -286,13 +284,27 @@ export default {
       }
 
       const paragraphIndex = this.getParagraphIndex()
-      const threads = this.renderedThreads
-        .filter(thread => this.highlightedThreadIds.has(thread.id))
+      const resolvedThreads = this.renderedThreads
         .map(thread => resolveMarginThread(thread, paragraphIndex.list))
 
-      const threadRanges = threads.flatMap(thread => this.buildThreadRanges(thread, paragraphIndex))
-      this.interactiveRanges = threadRanges.slice()
-      this.applyNativeHighlights(threadRanges)
+      const underlinedThreads = this.showAnnotationsPane
+        ? resolvedThreads
+        : resolvedThreads.filter(thread => this.highlightedThreadIds.has(thread.id))
+      const activeThreads = resolvedThreads
+        .filter(thread => this.highlightedThreadIds.has(thread.id))
+
+      const underlineRanges = underlinedThreads.flatMap(thread => this.buildThreadRanges(thread, paragraphIndex))
+      const activeRanges = activeThreads.flatMap(thread => this.buildThreadRanges(thread, paragraphIndex))
+
+      this.interactiveRanges = underlineRanges.filter(entry => entry.clickable)
+      this.setNativeHighlight(
+        UNDERLINE_HIGHLIGHT_NAME,
+        underlineRanges.filter(entry => !entry.detached).map(entry => entry.range)
+      )
+      this.setNativeHighlight(
+        ACTIVE_HIGHLIGHT_NAME,
+        activeRanges.filter(entry => !entry.detached).map(entry => entry.range)
+      )
     },
 
     scheduleRefresh () {

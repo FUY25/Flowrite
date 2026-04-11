@@ -112,7 +112,9 @@ describe('Flowrite margin composer', function () {
       textarea.dispatchEvent(new Event('input', { bubbles: true }))
       await Vue.nextTick()
 
-      vm.$children[0].submit()
+      const submitButton = vm.$el.querySelector('[data-testid="flowrite-margin-thread-submit"]')
+      expect(submitButton).to.not.equal(null)
+      submitButton.click()
       await Vue.nextTick()
 
       expect(closeCalls).to.equal(0)

@@ -89,6 +89,18 @@ The features below complete the V1 product vision. These are the missing pieces 
 - [ ] AI-assisted changes visually distinct in diffs
 - [ ] Snapshot creation on meaningful events (AI suggestion accepted, manual save after large edit)
 
+### 2.4 Open-Source AI Access: Claude API Key Path
+**Status:** Partial foundation exists via current runtime settings, but the app still feels too gateway-centric for open-source users.
+**What's needed:**
+- [ ] First-class "Use your Claude API key" setup path in onboarding/settings
+- [ ] Provider abstraction in runtime settings so direct Claude access and gateway access are both supported cleanly
+- [ ] Clear provider selection UX: Claude direct, Flowrite gateway, future providers
+- [ ] Direct Claude validation flow with good error states (bad key, quota, network, unsupported model)
+- [ ] Model picker tuned for Claude naming and sane defaults for open-source/self-serve users
+- [ ] Documentation for local-only usage with no hosted Flowrite service dependency
+- [ ] Safe migration path for existing users already configured through the current gateway settings
+- [ ] Privacy copy that makes local document + direct API behavior explicit
+
 ---
 
 ## Phase 3: Writer Memory & AI Intelligence
@@ -127,6 +139,19 @@ The soul of Flowrite. These features transform AI from a generic commenter into 
 - [ ] Reduce AI verbosity: comments should be concise and pointed
 - [ ] Eval suite: canned documents with expected comment quality benchmarks
 - [ ] Prompt caching optimization: measure and reduce API costs
+
+### 3.4 Agent CLI for Commenting, Discussion, and Rewrite Actions
+**Status:** Not started
+**What's needed:**
+- [ ] CLI command surface for external agents to target a document without touching markdown directly
+- [ ] Commands for global discussion messages, margin comments, and rewrite/suggestion creation
+- [ ] Anchor input format that supports exact range coordinates plus quote/context fallback
+- [ ] Stable machine-readable output (`json`) for agent integrations
+- [ ] Idempotent command semantics so agents can retry safely
+- [ ] Clear separation between comment sidecar writes and markdown edits
+- [ ] Auth/runtime config reuse so Claude Code, OpenCode, OpenClaw, or other agents can use the same local Flowrite runtime
+- [ ] Safety rules around path scoping and thread ownership to prevent agents from writing into the wrong document
+- [ ] Documentation and examples for "agent leaves a margin comment" and "agent proposes a rewrite" workflows
 
 ---
 
@@ -232,10 +257,12 @@ Long-term ideas, not committed. Evaluate after V1 ships.
 
 ```
 NOW        Phase 2: Suggestion UI, Auto-Save, Version History, Shortcuts
+           Plus direct Claude API key support for open-source/self-serve users
            (Complete the V1 product vision)
 
 NEXT       Phase 3: Writer Memory, Memory UI, AI prompt quality
-           (Make the AI companion feel personal)
+           Plus agent CLI for comments/discussion/rewrite flows
+           (Make the AI companion feel personal and scriptable)
 
 THEN       Phase 4: Theming, MarkText trim, writing flow
            (Polish the daily writing experience)
@@ -253,7 +280,9 @@ FUTURE     Phase 6: Ambient AI, multi-doc, cloud, Vue 3
 
 - **Suggestion UI** blocks the full comment-first workflow — users can't act on AI rewrites without it
 - **Auto-save** is a prerequisite for version history to be meaningful
+- **Direct Claude API key support** is near-term critical for open-source adoption; the app should not feel locked to a hosted gateway path
 - **Writer memory** (`save_memory` tool) must land before memory management UI
+- **Agent CLI** should reuse the existing sidecar/runtime architecture rather than invent a second write path
 - **MarkText trim** should be done carefully — audit usage before removing features
 - **Vue 3 migration** is the biggest technical risk; defer until product-market fit is validated
 - **Ambient AI** (Phase 6) is a hard UX problem; ship V1 without it and learn from writer behavior first

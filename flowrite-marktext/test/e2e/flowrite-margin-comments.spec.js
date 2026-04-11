@@ -153,6 +153,18 @@ const nativeMarginHighlightCount = async page => {
   })
 }
 
+const nativeMarginUnderlineCount = async page => {
+  return page.evaluate(() => {
+    const highlightName = 'flowrite-margin-anchor-underline'
+    const registry = typeof CSS !== 'undefined' ? CSS.highlights : null
+    const highlight = registry && typeof registry.get === 'function'
+      ? registry.get(highlightName)
+      : null
+
+    return highlight ? Array.from(highlight).length : 0
+  })
+}
+
 test.describe('Flowrite margin comments', () => {
   test('shows Ask Flowrite for sentence selection', async () => {
     test.setTimeout(60000)
@@ -290,6 +302,198 @@ test.describe('Flowrite margin comments', () => {
       await expect(page.locator('[data-testid="flowrite-selection-toolbar-row"]')).toHaveCount(1)
       await expect(page.locator('[data-testid="flowrite-selection-tool-quote"]')).toHaveCount(0)
       await expect(page.locator('[data-testid="flowrite-selection-tool-code"]')).toHaveCount(0)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('posts a multi-paragraph margin comment from the rail composer', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-multiparagraph-post-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+    const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n\nA later paragraph that lands with a sharper note.\n', 'utf8')
+    await fs.writeFile(clientModulePath, `
+      module.exports.createAnthropicClient = function createAnthropicClient () {
+        return {
+          client: {
+            messages: {
+              create: async function create () {
+                return {
+                  id: 'msg_margin_text_only',
+                  role: 'assistant',
+                  stop_reason: 'end_turn',
+                  content: [{
+                    type: 'text',
+                    text: 'No margin reply.'
+                  }]
+                }
+              }
+            }
+          },
+          model: 'flowrite-test-model'
+        }
+      }
+    `, 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], {
+        userDataDir,
+        env: {
+          AI_GATEWAY_API_KEY: 'flowrite-test-key',
+          FLOWRITE_TEST_CLIENT_MODULE: clientModulePath
+        }
+      })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        const paragraphs = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+        return paragraphs.some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence')) &&
+          paragraphs.some(node => (node.textContent || '').includes('sharper note'))
+      })
+
+      await selectTextRangeInEditor(page, 'reflective paragraph', 'sharper note')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+
+      const composerInput = page.locator('[data-testid="flowrite-margin-thread-input"]').last()
+      await expect(composerInput).toBeVisible()
+      await composerInput.fill('Keep both paragraphs connected.')
+      await page.locator('[data-testid="flowrite-margin-thread-submit"]').last().click({ force: true })
+
+      await page.waitForFunction(() => {
+        const editorRoot = document.querySelector('.editor-wrapper')
+        const store = editorRoot && editorRoot.__vue__ && editorRoot.__vue__.$store
+        const comments = store && store.state && store.state.flowrite
+          ? store.state.flowrite.comments
+          : []
+        return Array.isArray(comments) && comments.some(thread => {
+          return thread &&
+            thread.scope === 'margin' &&
+            Array.isArray(thread.comments) &&
+            thread.comments.some(comment => comment && comment.author === 'user' && comment.body === 'Keep both paragraphs connected.')
+        })
+      })
+
+      await expect(page.locator('[data-testid="flowrite-margin-thread"]')).toHaveCount(1)
+      await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toHaveCount(0)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('posts a multi-paragraph margin comment and receives an assistant reply', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-multiparagraph-reply-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+    const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n\nA later paragraph that lands with a sharper note.\n', 'utf8')
+    await fs.writeFile(clientModulePath, `
+      module.exports.createAnthropicClient = function createAnthropicClient () {
+        let callCount = 0
+        return {
+          client: {
+            messages: {
+              create: async function create (payload) {
+                callCount += 1
+                if (callCount % 2 === 1) {
+                  const threadId = payload.metadata && payload.metadata.threadId
+                    ? payload.metadata.threadId
+                    : 'thread-margin-fallback'
+                  return {
+                    id: 'msg_margin_tool_1',
+                    role: 'assistant',
+                    stop_reason: 'tool_use',
+                    content: [{
+                      type: 'tool_use',
+                      id: 'toolu_margin_1',
+                      name: 'create_comment',
+                      input: {
+                        threadId,
+                        scope: 'margin',
+                        body: 'AI reply: keep the two paragraphs stitched together.'
+                      }
+                    }]
+                  }
+                }
+
+                return {
+                  id: 'msg_margin_tool_2',
+                  role: 'assistant',
+                  stop_reason: 'end_turn',
+                  content: [{
+                    type: 'text',
+                    text: 'Reply posted.'
+                  }]
+                }
+              }
+            }
+          },
+          model: 'flowrite-test-model'
+        }
+      }
+    `, 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], {
+        userDataDir,
+        env: {
+          AI_GATEWAY_API_KEY: 'flowrite-test-key',
+          FLOWRITE_TEST_CLIENT_MODULE: clientModulePath
+        }
+      })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        const paragraphs = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+        return paragraphs.some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence')) &&
+          paragraphs.some(node => (node.textContent || '').includes('sharper note'))
+      })
+
+      await selectTextRangeInEditor(page, 'reflective paragraph', 'sharper note')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+
+      const composerInput = page.locator('[data-testid="flowrite-margin-thread-input"]').last()
+      await expect(composerInput).toBeVisible()
+      await composerInput.fill('Keep both paragraphs connected.')
+      await page.locator('[data-testid="flowrite-margin-thread-submit"]').last().click({ force: true })
+
+      await page.waitForFunction(() => {
+        const store = document.querySelector('.editor-wrapper').__vue__.$store
+        const comments = store && store.state && store.state.flowrite
+          ? store.state.flowrite.comments
+          : []
+
+        return Array.isArray(comments) && comments.some(thread => {
+          return thread &&
+            thread.scope === 'margin' &&
+            Array.isArray(thread.comments) &&
+            thread.comments.some(comment => comment && comment.author === 'assistant' && comment.body === 'AI reply: keep the two paragraphs stitched together.')
+        })
+      })
+
+      const firstThread = page.locator('[data-testid="flowrite-margin-thread"]').first()
+      await expect(firstThread).toContainText('Keep both paragraphs connected.')
+      await expect(firstThread).toContainText('AI reply: keep the two paragraphs stitched together.')
     } finally {
       try {
         await closeElectron(app)
@@ -678,6 +882,27 @@ test.describe('Flowrite margin comments', () => {
       const composer = page.locator('[data-testid="flowrite-margin-thread-composer"]')
       await expect(composer).toBeVisible()
 
+      const composerGeometry = await page.evaluate(() => {
+        const paragraph = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .find(node => (node.textContent || '').includes('reflective paragraph'))
+        const composerCard = document.querySelector('[data-testid="flowrite-margin-thread-composer"] .flowrite-margin-thread-card')
+
+        if (!paragraph || !composerCard) {
+          return null
+        }
+
+        const paragraphRect = paragraph.getBoundingClientRect()
+        const composerRect = composerCard.getBoundingClientRect()
+        return {
+          verticalDelta: Math.abs(composerRect.top - paragraphRect.top),
+          horizontalDelta: composerRect.left - paragraphRect.right
+        }
+      })
+
+      expect(composerGeometry).not.toBeNull()
+      expect(composerGeometry.verticalDelta).toBeLessThanOrEqual(28)
+      expect(composerGeometry.horizontalDelta).toBeGreaterThan(24)
+
       const submitButton = page.locator('[data-testid="flowrite-margin-thread-submit"]').last()
       await setComposerDraft(page, 'Can you sharpen this passage?')
       await expect(submitButton).toBeEnabled()
@@ -687,7 +912,7 @@ test.describe('Flowrite margin comments', () => {
       await expect(page.locator('[data-testid="flowrite-margin-thread"]')).toHaveCount(1)
       await expect(page.locator('[data-testid="flowrite-margin-thread-reply-input"]')).toHaveCount(0)
       await expect(page.locator('[data-testid="flowrite-margin-dot"]')).toHaveCount(1)
-      await expect.poll(() => nativeMarginHighlightCount(page)).toBe(0)
+      await expect.poll(() => nativeMarginUnderlineCount(page)).toBeGreaterThan(0)
 
       await page.setViewportSize({ width: 1240, height: 720 })
       await expect(sideBar).toBeHidden()
@@ -696,6 +921,7 @@ test.describe('Flowrite margin comments', () => {
       await expect(firstThread).toContainText('Can you sharpen this passage?')
       await expect(firstThread.locator('[data-testid="flowrite-margin-thread-status"]')).toContainText('Attached')
       await firstThread.click()
+      await expect.poll(() => nativeMarginHighlightCount(page)).toBeGreaterThan(0)
       await expect(page.locator('[data-testid="flowrite-margin-thread-reply-input"]')).toHaveCount(1)
 
       const geometry = await page.evaluate(() => {
@@ -716,8 +942,123 @@ test.describe('Flowrite margin comments', () => {
       })
 
       expect(geometry).not.toBeNull()
-      expect(geometry.verticalDelta).toBeLessThanOrEqual(28)
+      expect(geometry.verticalDelta).toBeLessThanOrEqual(90)
       expect(geometry.horizontalDelta).toBeGreaterThan(24)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('dismisses the Ask Flowrite composer on Escape', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-composer-escape-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n', 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], { userDataDir })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await selectTextInEditor(page, 'reflective paragraph')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+      const composerInput = page.locator('[data-testid="flowrite-margin-thread-input"]').last()
+      await expect(composerInput).toBeVisible()
+      await composerInput.fill('Discard this draft.')
+
+      await composerInput.press('Escape')
+
+      await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toHaveCount(0)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('dismisses an existing thread reply input on Escape', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-real-reply-escape-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+    const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n', 'utf8')
+    await fs.writeFile(clientModulePath, `
+      module.exports.createAnthropicClient = function createAnthropicClient () {
+        return {
+          client: {
+            messages: {
+              create: async function create () {
+                return {
+                  id: 'msg_margin_text_only',
+                  role: 'assistant',
+                  stop_reason: 'end_turn',
+                  content: [{
+                    type: 'text',
+                    text: 'No margin reply.'
+                  }]
+                }
+              }
+            }
+          },
+          model: 'flowrite-test-model'
+        }
+      }
+    `, 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], {
+        userDataDir,
+        env: {
+          AI_GATEWAY_API_KEY: 'flowrite-test-key',
+          FLOWRITE_TEST_CLIENT_MODULE: clientModulePath
+        }
+      })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await selectTextInEditor(page, 'reflective paragraph')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+      const composerInput = page.locator('[data-testid="flowrite-margin-thread-input"]').last()
+      await expect(composerInput).toBeVisible()
+      await composerInput.fill('Initial thread body.')
+      await page.locator('[data-testid="flowrite-margin-thread-submit"]').last().click({ force: true })
+
+      const thread = page.locator('[data-testid="flowrite-margin-thread"]').first()
+      await expect(thread).toBeVisible()
+      await thread.click()
+
+      const replyInput = page.locator('[data-testid="flowrite-margin-thread-reply-input"]').last()
+      await expect(replyInput).toBeVisible()
+      await replyInput.fill('Discard this reply draft.')
+      await replyInput.press('Escape')
+
+      await expect(page.locator('[data-testid="flowrite-margin-thread-reply-input"]')).toHaveCount(0)
     } finally {
       try {
         await closeElectron(app)

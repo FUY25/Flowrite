@@ -13,6 +13,29 @@ const mountThreadCard = props => {
 }
 
 describe('Flowrite margin thread card', function () {
+  it('renders comment bodies without a leading blank line', async function () {
+    const vm = mountThreadCard({
+      thread: {
+        id: 'thread-0',
+        comments: [{ id: 'c1', author: 'user', body: 'Keep this flush.' }]
+      }
+    })
+
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+      const body = vm.$el.querySelector('[data-testid="flowrite-margin-thread-body"]')
+      expect(body).to.not.equal(null)
+      expect(body.textContent).to.equal('Keep this flush.')
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
+
   it('keeps reply input hidden for an active existing thread until the card is clicked (collapsed reply state)', async function () {
     const vm = mountThreadCard({
       thread: {

@@ -1,7 +1,8 @@
 <template>
   <div
-    v-if="anchor"
+    v-if="composerThread"
     class="flowrite-margin-thread-composer"
+    :class="{ 'is-positioned': positioned }"
     data-testid="flowrite-margin-thread-composer"
     @click.stop
     @mousedown.stop
@@ -17,6 +18,8 @@
       :submitting="submitting"
       :error="error"
       @submit-composer="submitComposer"
+      @close-composer="closeComposer"
+      @size-change="$emit('size-change')"
     ></margin-thread-card>
   </div>
 </template>
@@ -30,9 +33,17 @@ export default {
     MarginThreadCard
   },
   props: {
+    thread: {
+      type: Object,
+      default: null
+    },
     anchor: {
       type: Object,
       default: null
+    },
+    positioned: {
+      type: Boolean,
+      default: false
     }
   },
   data () {
@@ -42,12 +53,24 @@ export default {
     }
   },
   computed: {
+    sourceAnchor () {
+      if (this.thread && this.thread.anchor) {
+        return this.thread.anchor
+      }
+
+      return this.anchor || null
+    },
+
     composerThread () {
-      return this.anchor
+      if (this.thread) {
+        return this.thread
+      }
+
+      return this.sourceAnchor
         ? {
           id: 'flowrite-margin-thread-composer',
           scope: SCOPE_MARGIN,
-          anchor: this.anchor,
+          anchor: this.sourceAnchor,
           comments: [],
           collapsed: false
         }
@@ -55,7 +78,7 @@ export default {
     }
   },
   watch: {
-    anchor: {
+    sourceAnchor: {
       immediate: true,
       handler () {
         this.submitting = false
@@ -64,6 +87,29 @@ export default {
     }
   },
   methods: {
+    anchorsMatch (leftAnchor, rightAnchor) {
+      if (!leftAnchor || !rightAnchor) {
+        return false
+      }
+
+      const leftStart = leftAnchor.start || {}
+      const rightStart = rightAnchor.start || {}
+      const leftEnd = leftAnchor.end || {}
+      const rightEnd = rightAnchor.end || {}
+
+      return leftAnchor.quote === rightAnchor.quote &&
+        leftStart.key === rightStart.key &&
+        leftStart.offset === rightStart.offset &&
+        leftEnd.key === rightEnd.key &&
+        leftEnd.offset === rightEnd.offset
+    },
+
+    closeComposer () {
+      this.$store.dispatch('CLOSE_FLOWRITE_MARGIN_COMPOSER', {
+        restoreAnnotationsPane: true
+      })
+    },
+
     closeAfterPersist (pendingBody) {
       if (!this.hasPersistedCommentWithBody(pendingBody)) {
         return false
@@ -77,7 +123,7 @@ export default {
 
     hasPersistedCommentWithBody (body) {
       const trimmedBody = typeof body === 'string' ? body.trim() : ''
-      if (!trimmedBody || !this.anchor) {
+      if (!trimmedBody || !this.sourceAnchor) {
         return false
       }
 
@@ -88,10 +134,9 @@ export default {
       return Array.isArray(comments) && comments.some(thread => (
         thread &&
         thread.scope === SCOPE_MARGIN &&
-        thread.anchor &&
-        thread.anchor.quote === this.anchor.quote &&
+        this.anchorsMatch(thread.anchor, this.sourceAnchor) &&
         Array.isArray(thread.comments) &&
-        thread.comments.some(comment => comment && comment.author === 'user' && comment.body === trimmedBody)
+        thread.comments.some(comment => comment && comment.author === 'user')
       ))
     },
 
@@ -162,9 +207,15 @@ export default {
 
 <style scoped>
   .flowrite-margin-thread-composer {
-    margin: 0 0 14px;
     position: relative;
     z-index: 2;
     pointer-events: auto;
+  }
+
+  .flowrite-margin-thread-composer.is-positioned {
+    margin: 0;
+    position: absolute;
+    left: 0;
+    right: 0;
   }
 </style>

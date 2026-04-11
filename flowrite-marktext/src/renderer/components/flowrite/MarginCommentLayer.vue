@@ -3,11 +3,6 @@
     class="flowrite-margin-surface"
     data-testid="flowrite-margin-comments"
   >
-    <margin-thread-composer
-      v-if="composerMarginThread"
-      :anchor="composerMarginThread.anchor"
-    ></margin-thread-composer>
-
     <div
       ref="threadRail"
       class="flowrite-margin-surface__threads"
@@ -15,19 +10,32 @@
         height: `${railHeight}px`
       }"
     >
-      <margin-thread-card
-        v-for="thread in positionedThreads"
-        :key="thread.id"
-        :ref="`flowrite-margin-thread-${thread.id}`"
-        :thread="thread"
-        :active="activeMarginThreadId === thread.id"
-        :style="{
-          top: `${thread.top}px`
-        }"
-        @focus-thread="activateThread"
-        @reply="replyToThread"
-        @size-change="scheduleRefresh"
-      ></margin-thread-card>
+      <template v-for="thread in positionedThreads">
+        <margin-thread-composer
+          v-if="thread.isComposer"
+          :key="thread.id"
+          :ref="`flowrite-margin-entry-${thread.id}`"
+          :thread="thread"
+          positioned
+          :style="{
+            top: `${thread.top}px`
+          }"
+          @size-change="scheduleRefresh"
+        ></margin-thread-composer>
+        <margin-thread-card
+          v-else
+          :key="thread.id"
+          :ref="`flowrite-margin-entry-${thread.id}`"
+          :thread="thread"
+          :active="activeMarginThreadId === thread.id"
+          :style="{
+            top: `${thread.top}px`
+          }"
+          @focus-thread="activateThread"
+          @reply="replyToThread"
+          @size-change="scheduleRefresh"
+        ></margin-thread-card>
+      </template>
     </div>
   </div>
 </template>
@@ -43,7 +51,6 @@ import MarginThreadComposer from './MarginThreadComposer.vue'
 const THREAD_GAP = 14
 const DOT_VERTICAL_OFFSET = 8
 const COMPRESSION_DRIFT_THRESHOLD = 80
-const COMPRESSION_MESSAGE_COUNT_THRESHOLD = 4
 
 export default {
   components: {
@@ -293,10 +300,27 @@ export default {
         })
         .filter(Boolean)
 
+      if (this.composerMarginThread && this.composerMarginThread.anchor) {
+        const resolvedComposer = resolveMarginThread(this.composerMarginThread, paragraphIndex.list)
+        const composerPosition = this.resolveThreadPosition(resolvedComposer, paragraphIndex, editorRect, editorContainer)
+        if (composerPosition) {
+          threads.push({
+            ...resolvedComposer,
+            id: this.composerMarginThread.id || 'flowrite-margin-thread-composer',
+            order: threads.length,
+            active: true,
+            naturalTop: composerPosition.top,
+            messageCount: 0,
+            height: this.threadHeights['flowrite-margin-thread-composer'] || this.estimateThreadHeight(resolvedComposer),
+            isDetached: false,
+            isComposer: true
+          })
+        }
+      }
+
       this.positionedThreads = buildMarginLayout(threads, {
         gap: THREAD_GAP,
-        compressionDriftThreshold: COMPRESSION_DRIFT_THRESHOLD,
-        compressionMessageCountThreshold: COMPRESSION_MESSAGE_COUNT_THRESHOLD
+        compressionDriftThreshold: COMPRESSION_DRIFT_THRESHOLD
       })
       this.threadPositionCache = this.positionedThreads.reduce((cache, thread) => {
         cache[thread.id] = thread.top
@@ -319,7 +343,7 @@ export default {
       let didChange = false
 
       this.positionedThreads.forEach(thread => {
-        const threadElement = this.$refs[`flowrite-margin-thread-${thread.id}`]
+        const threadElement = this.$refs[`flowrite-margin-entry-${thread.id}`]
         const target = Array.isArray(threadElement) ? threadElement[0] : threadElement
         const element = target && target.$el ? target.$el : target
         if (!element || typeof element.getBoundingClientRect !== 'function') {

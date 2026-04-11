@@ -2,7 +2,6 @@ const isFiniteNumber = value => Number.isFinite(value)
 
 const DEFAULT_GAP = 14
 const DEFAULT_COMPRESSION_DRIFT_THRESHOLD = 80
-const DEFAULT_COMPRESSION_MESSAGE_COUNT_THRESHOLD = 4
 const ACTIVE_THREAD_WEIGHT = 3
 
 const toSafeCount = thread => {
@@ -26,10 +25,6 @@ export const buildMarginLayout = (threads, options = {}) => {
   const compressionDriftThreshold = isFiniteNumber(options.compressionDriftThreshold)
     ? options.compressionDriftThreshold
     : DEFAULT_COMPRESSION_DRIFT_THRESHOLD
-  const compressionMessageCountThreshold = isFiniteNumber(options.compressionMessageCountThreshold)
-    ? options.compressionMessageCountThreshold
-    : DEFAULT_COMPRESSION_MESSAGE_COUNT_THRESHOLD
-
   const sortedThreads = (Array.isArray(threads) ? threads.slice() : [])
     .filter(Boolean)
     .sort((left, right) => {
@@ -74,8 +69,7 @@ export const buildMarginLayout = (threads, options = {}) => {
     const drift = top - thread.naturalTop
     const messageCount = toSafeCount(thread)
     const collapsed = Boolean(thread.collapsed) ||
-      Math.abs(drift) >= compressionDriftThreshold ||
-      messageCount >= compressionMessageCountThreshold
+      Math.abs(drift) >= compressionDriftThreshold
 
     return {
       ...thread,

@@ -4,10 +4,18 @@ Flowrite is a mac-first writing editor built on top of a MarkText fork in [`flow
 
 This repo is the real git root. `flowrite-marktext` is a normal tracked folder inside this repo, not a nested git repository.
 
+## Canonical Repo
+
+- Canonical GitHub repo: `https://github.com/FUY25/Flowrite`
+- Local path and GitHub repo are two views of the same project.
+- Push and pull from the root repo, not from inside `flowrite-marktext`.
+- Collaborators should treat GitHub as the shared source of truth once a branch is pushed.
+
 ## Workspace Layout
 
 - [`flowrite-marktext`](./flowrite-marktext): the Electron app
 - [`ROADMAP.md`](./ROADMAP.md): current product roadmap
+- [`agent.md`](./agent.md): collaborator and agent working conventions
 
 ## Current Runtime Baseline
 

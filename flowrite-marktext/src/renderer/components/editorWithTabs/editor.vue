@@ -1524,15 +1524,20 @@ export default {
     z-index: 4;
   }
 
-  ::highlight(flowrite-margin-anchor-active) {
-    background-color: rgba(210, 153, 51, 0.10);
+  ::highlight(flowrite-margin-anchor-underline) {
+    background-color: transparent;
     color: inherit;
     text-decoration-line: underline;
     text-decoration-style: solid;
-    text-decoration-color: rgba(210, 153, 51, 0.52);
+    text-decoration-color: rgba(210, 153, 51, 0.42);
     text-decoration-thickness: 1px;
     text-decoration-skip-ink: none;
     text-underline-offset: 0.12em;
+  }
+
+  ::highlight(flowrite-margin-anchor-active) {
+    background-color: rgba(210, 153, 51, 0.10);
+    color: inherit;
   }
 
   .typewriter .editor-component {

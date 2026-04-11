@@ -62,12 +62,7 @@
                   {{ formatTimestamp(comment.createdAt) }}
                 </span>
               </div>
-              <p
-                class="flowrite-margin-thread-card__body"
-                data-testid="flowrite-margin-thread-body"
-              >
-                {{ comment.body }}
-              </p>
+              <p class="flowrite-margin-thread-card__body" data-testid="flowrite-margin-thread-body">{{ comment.body }}</p>
             </div>
 
             <button
@@ -319,7 +314,9 @@ export default {
       }
 
       this.showReplyInput = true
-      this.$store.dispatch('ACTIVATE_MARGIN_THREAD', this.thread.id)
+      if (this.$store && typeof this.$store.dispatch === 'function') {
+        this.$store.dispatch('ACTIVATE_MARGIN_THREAD', this.thread.id)
+      }
       this.$emit('focus-thread', this.thread.id)
       this.$nextTick(() => {
         if (this.$refs.replyInput) {
@@ -599,13 +596,6 @@ export default {
     font-size: 14px;
     line-height: 1.45;
     color: rgba(44, 49, 58, 0.92);
-  }
-
-  .flowrite-margin-thread-card__comments.is-collapsed .flowrite-margin-thread-card__body {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
   }
 
   .flowrite-margin-thread-card__fold {
