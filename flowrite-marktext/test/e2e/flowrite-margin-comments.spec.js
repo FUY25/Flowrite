@@ -117,6 +117,42 @@ const setComposerDraft = async (page, body) => {
   await input.fill(body)
 }
 
+const getNativeMarginHighlightGeometry = async page => {
+  return page.evaluate(() => {
+    const highlightName = 'flowrite-margin-anchor-active'
+    const registry = typeof CSS !== 'undefined' ? CSS.highlights : null
+    const highlight = registry && typeof registry.get === 'function'
+      ? registry.get(highlightName)
+      : null
+
+    if (!highlight) {
+      return null
+    }
+
+    const ranges = Array.from(highlight)
+    const rects = ranges.flatMap(range => Array.from(range.getClientRects()))
+      .filter(rect => rect && rect.width > 0 && rect.height > 0)
+
+    return {
+      rangeCount: ranges.length,
+      rectCount: rects.length,
+      maxWidth: rects.reduce((width, rect) => Math.max(width, rect.width), 0)
+    }
+  })
+}
+
+const nativeMarginHighlightCount = async page => {
+  return page.evaluate(() => {
+    const highlightName = 'flowrite-margin-anchor-active'
+    const registry = typeof CSS !== 'undefined' ? CSS.highlights : null
+    const highlight = registry && typeof registry.get === 'function'
+      ? registry.get(highlightName)
+      : null
+
+    return highlight ? Array.from(highlight).length : 0
+  })
+}
+
 test.describe('Flowrite margin comments', () => {
   test('shows Ask Flowrite for sentence selection', async () => {
     test.setTimeout(60000)
@@ -150,6 +186,82 @@ test.describe('Flowrite margin comments', () => {
     }
   })
 
+  test('renders Ask Flowrite inside a two-row integrated selection toolbar', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-selection-toolbar-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n', 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], { userDataDir })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await selectTextInEditor(page, 'reflective paragraph')
+
+      const toolbar = page.locator('[data-testid="flowrite-selection-toolbar"]')
+      await expect(toolbar).toBeVisible()
+      await expect(page.locator('[data-testid="flowrite-selection-toolbar-row"]')).toHaveCount(2)
+      await expect(page.locator('[data-testid="flowrite-selection-tool-quote"]')).toBeVisible()
+      await expect(page.locator('[data-testid="flowrite-selection-tool-code"]')).toBeVisible()
+      await expect(page.locator('[data-testid="flowrite-selection-comment-button"]')).toBeVisible()
+
+      const iconMarkup = await page.evaluate(() => {
+        const quoteButton = document.querySelector('[data-testid="flowrite-selection-tool-quote"]')
+        const codeButton = document.querySelector('[data-testid="flowrite-selection-tool-code"]')
+        return {
+          quote: quoteButton ? quoteButton.innerHTML : '',
+          code: codeButton ? codeButton.innerHTML : ''
+        }
+      })
+
+      expect(iconMarkup.quote).toContain('ag-format-picker__icon-wrapper')
+      expect(iconMarkup.quote).toContain('ag-format-picker__icon-inner')
+      expect(iconMarkup.code).toContain('ag-format-picker__icon-wrapper')
+      expect(iconMarkup.code).toContain('ag-format-picker__icon-inner')
+
+      const geometry = await page.evaluate(() => {
+        const askButton = document.querySelector('[data-testid="flowrite-selection-comment-button"]')
+        const quoteButton = document.querySelector('[data-testid="flowrite-selection-tool-quote"]')
+        const toolbarSurface = document.querySelector('[data-testid="flowrite-selection-toolbar"]')
+
+        if (!askButton || !quoteButton || !toolbarSurface) {
+          return null
+        }
+
+        const askRect = askButton.getBoundingClientRect()
+        const quoteRect = quoteButton.getBoundingClientRect()
+        const toolbarRect = toolbarSurface.getBoundingClientRect()
+
+        return {
+          askWidth: askRect.width,
+          quoteWidth: quoteRect.width,
+          toolbarHeight: toolbarRect.height
+        }
+      })
+
+      expect(geometry).not.toBeNull()
+      expect(geometry.askWidth).toBeGreaterThan(geometry.quoteWidth * 1.5)
+      expect(geometry.toolbarHeight).toBeGreaterThan(70)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   test('shows Ask Flowrite for multi-paragraph selection', async () => {
     test.setTimeout(60000)
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-multiparagraph-'))
@@ -175,6 +287,9 @@ test.describe('Flowrite margin comments', () => {
 
       await selectTextRangeInEditor(page, 'reflective paragraph', 'sharper note')
       await expect(page.getByRole('button', { name: 'Ask Flowrite' })).toBeVisible()
+      await expect(page.locator('[data-testid="flowrite-selection-toolbar-row"]')).toHaveCount(1)
+      await expect(page.locator('[data-testid="flowrite-selection-tool-quote"]')).toHaveCount(0)
+      await expect(page.locator('[data-testid="flowrite-selection-tool-code"]')).toHaveCount(0)
     } finally {
       try {
         await closeElectron(app)
@@ -300,28 +415,25 @@ test.describe('Flowrite margin comments', () => {
       await selectTextInEditor(page, 'soft cadence')
       await page.getByRole('button', { name: 'Ask Flowrite' }).click()
       await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toBeVisible()
-      await expect(page.locator('[data-testid="flowrite-margin-highlight"]')).toHaveCount(1)
-
-      const geometry = await page.evaluate(() => {
-        const paragraph = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
-          .find(node => (node.textContent || '').includes('soft cadence and a closing phrase'))
-        const highlight = document.querySelector('[data-testid="flowrite-margin-highlight"]')
-
-        if (!paragraph || !highlight) {
-          return null
-        }
-
-        const paragraphRect = paragraph.getBoundingClientRect()
-        const highlightRect = highlight.getBoundingClientRect()
-        return {
-          paragraphWidth: paragraphRect.width,
-          highlightWidth: highlightRect.width
-        }
+      await page.waitForFunction(() => {
+        const highlight = CSS.highlights && CSS.highlights.get('flowrite-margin-anchor-active')
+        return Boolean(highlight && Array.from(highlight).length > 0)
       })
 
+      const paragraphWidth = await page.evaluate(() => {
+        const paragraph = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .find(node => (node.textContent || '').includes('soft cadence and a closing phrase'))
+        const paragraphRect = paragraph ? paragraph.getBoundingClientRect() : null
+        return paragraphRect ? paragraphRect.width : null
+      })
+      const geometry = await getNativeMarginHighlightGeometry(page)
+
       expect(geometry).not.toBeNull()
-      expect(geometry.highlightWidth).toBeLessThan(geometry.paragraphWidth)
-      expect(geometry.highlightWidth).toBeGreaterThan(40)
+      expect(paragraphWidth).not.toBeNull()
+      expect(geometry.rangeCount).toBeGreaterThan(0)
+      expect(geometry.rectCount).toBeGreaterThan(0)
+      expect(geometry.maxWidth).toBeLessThan(paragraphWidth)
+      expect(geometry.maxWidth).toBeGreaterThan(40)
     } finally {
       try {
         await closeElectron(app)
@@ -425,7 +537,10 @@ test.describe('Flowrite margin comments', () => {
 
       expect(threadId).not.toBeNull()
       await page.locator('[data-testid="flowrite-margin-thread"]').first().click()
-      await page.waitForFunction(() => document.querySelectorAll('[data-testid="flowrite-margin-highlight"]').length > 0)
+      await page.waitForFunction(() => {
+        const highlight = CSS.highlights && CSS.highlights.get('flowrite-margin-anchor-active')
+        return Boolean(highlight && Array.from(highlight).length > 0)
+      })
 
       const scrollBefore = await page.evaluate(() => {
         const editor = document.querySelector('.editor-component')
@@ -433,14 +548,23 @@ test.describe('Flowrite margin comments', () => {
       })
 
       await page.evaluate(() => {
-        const highlight = document.querySelector('[data-testid="flowrite-margin-highlight"]')
-        if (!highlight) {
-          throw new Error('Unable to find a visible Flowrite margin highlight.')
+        const highlight = CSS.highlights && CSS.highlights.get('flowrite-margin-anchor-active')
+        const targetRange = highlight ? Array.from(highlight)[0] : null
+        const rect = targetRange ? targetRange.getBoundingClientRect() : null
+        if (!rect || !rect.width || !rect.height) {
+          throw new Error('Unable to find a visible Flowrite native highlight range.')
         }
 
-        highlight.dispatchEvent(new MouseEvent('click', {
+        const targetNode = document.elementFromPoint(rect.left + Math.min(rect.width / 2, 8), rect.top + Math.min(rect.height / 2, 4))
+        if (!targetNode) {
+          throw new Error('Unable to find a clickable DOM target for the highlighted passage.')
+        }
+
+        targetNode.dispatchEvent(new MouseEvent('click', {
           bubbles: true,
-          cancelable: true
+          cancelable: true,
+          clientX: rect.left + Math.min(rect.width / 2, 8),
+          clientY: rect.top + Math.min(rect.height / 2, 4)
         }))
       })
       await page.waitForTimeout(200)
@@ -563,7 +687,7 @@ test.describe('Flowrite margin comments', () => {
       await expect(page.locator('[data-testid="flowrite-margin-thread"]')).toHaveCount(1)
       await expect(page.locator('[data-testid="flowrite-margin-thread-reply-input"]')).toHaveCount(0)
       await expect(page.locator('[data-testid="flowrite-margin-dot"]')).toHaveCount(1)
-      await expect(page.locator('[data-testid="flowrite-margin-highlight"]')).toHaveCount(0)
+      await expect.poll(() => nativeMarginHighlightCount(page)).toBe(0)
 
       await page.setViewportSize({ width: 1240, height: 720 })
       await expect(sideBar).toBeHidden()

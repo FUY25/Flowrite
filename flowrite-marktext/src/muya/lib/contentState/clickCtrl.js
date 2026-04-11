@@ -148,18 +148,25 @@ const clickCtrl = ContentState => {
       }
     }
     const block = this.getBlock(start.key)
+    const endBlock = this.getBlock(end.key)
     let needRender = false
     // is show format float box?
     if (
-      start.key === end.key &&
-      start.offset !== end.offset &&
+      (start.key !== end.key || start.offset !== end.offset) &&
+      block &&
+      endBlock &&
       HAS_TEXT_BLOCK_REG.test(block.type) &&
+      HAS_TEXT_BLOCK_REG.test(endBlock.type) &&
       block.functionType !== 'codeContent' &&
-      block.functionType !== 'languageInput'
+      block.functionType !== 'languageInput' &&
+      endBlock.functionType !== 'codeContent' &&
+      endBlock.functionType !== 'languageInput'
     ) {
       const reference = this.getPositionReference()
       const { formats } = this.selectionFormats()
       eventCenter.dispatch('muya-format-picker', { reference, formats })
+    } else {
+      eventCenter.dispatch('muya-format-picker', { reference: null })
     }
 
     // update '```xxx' to code block when you click other place or use press arrow key.

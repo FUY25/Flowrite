@@ -7,6 +7,7 @@ import DragDrop from './eventHandler/dragDrop'
 import Resize from './eventHandler/resize'
 import ClickEvent from './eventHandler/clickEvent'
 import { CLASS_OR_ID, MUYA_DEFAULT_OPTION } from './config'
+import selection from './selection'
 import { wordCount } from './utils'
 import ExportMarkdown from './utils/exportMarkdown'
 import ExportHtml from './utils/exportHtml'
@@ -117,9 +118,15 @@ class Muya {
   }
 
   dispatchSelectionChange = () => {
-    const selectionChanges = this.contentState.selectionChange()
+    const cursor = selection.getCursorRange()
+    if (!cursor.start || !cursor.end) {
+      return null
+    }
+
+    const selectionChanges = this.contentState.selectionChange(cursor)
 
     this.eventCenter.dispatch('selectionChange', selectionChanges)
+    return selectionChanges
   }
 
   dispatchSelectionFormats = () => {
@@ -196,7 +203,12 @@ class Muya {
   }
 
   getSelection () {
-    return this.contentState.selectionChange()
+    const cursor = selection.getCursorRange()
+    if (!cursor.start || !cursor.end) {
+      return null
+    }
+
+    return this.contentState.selectionChange(cursor)
   }
 
   setFocusMode (bool) {

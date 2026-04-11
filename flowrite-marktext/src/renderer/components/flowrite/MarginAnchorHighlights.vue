@@ -1,30 +1,20 @@
 <template>
-  <div
-    v-if="visibleSegments.length"
-    class="flowrite-margin-highlights"
-    aria-hidden="true"
-  >
-    <div
-      v-for="segment in visibleSegments"
-      :key="segment.key"
-      class="flowrite-margin-highlight"
-      :class="{
-        'is-detached': segment.detached,
-        'is-clickable': segment.clickable
-      }"
-      :style="segment.style"
-      data-testid="flowrite-margin-highlight"
-      @click="activateThread(segment.threadId)"
-    ></div>
-  </div>
+  <span v-if="false"></span>
 </template>
 
 <script>
 import { mapState } from 'vuex'
 import { resolveMarginThread } from '../../../flowrite/anchors'
 import { SCOPE_MARGIN, ANCHOR_DETACHED } from '../../../flowrite/constants'
+const HIGHLIGHT_NAME = 'flowrite-margin-anchor-active'
 
-const HIGHLIGHT_HEIGHT = 4
+const supportsCssHighlights = () => {
+  return typeof window !== 'undefined' &&
+    typeof window.Highlight === 'function' &&
+    typeof CSS !== 'undefined' &&
+    CSS.highlights &&
+    typeof CSS.highlights.set === 'function'
+}
 
 const createRangeFromParagraph = (paragraph, startOffset, endOffset) => {
   if (!paragraph || typeof document === 'undefined') {
@@ -81,12 +71,12 @@ export default {
   },
   data () {
     return {
-      visibleSegments: [],
+      interactiveRanges: [],
       rafId: null,
       scrollContainer: null,
       resizeObserver: null,
       resizeListener: null,
-      scrollListener: null
+      clickListener: null
     }
   },
   computed: {
@@ -162,6 +152,7 @@ export default {
   },
   beforeDestroy () {
     this.detachListeners()
+    this.clearNativeHighlights()
     if (this.rafId) {
       window.cancelAnimationFrame(this.rafId)
       this.rafId = null
@@ -194,11 +185,6 @@ export default {
       }
 
       return this.$el ? this.$el.parentElement : null
-    },
-
-    getEditorContainerRect () {
-      const container = this.getEditorContainer()
-      return container ? container.getBoundingClientRect() : null
     },
 
     buildFallbackParagraphIndex () {
@@ -237,7 +223,7 @@ export default {
       return createRangeFromParagraph(paragraph.element, startOffset, endOffset)
     },
 
-    resolveThreadRanges (thread, paragraphIndex, editorRect) {
+    buildThreadRanges (thread, paragraphIndex) {
       const resolution = thread.resolvedAnchor || {}
       const ranges = Array.isArray(resolution.ranges) && resolution.ranges.length
         ? resolution.ranges
@@ -251,47 +237,51 @@ export default {
             : (thread.anchor && thread.anchor.end ? thread.anchor.end.offset : 0)
         }]
 
-      const segments = []
-
-      ranges.forEach((rangeEntry, index) => {
-        const range = this.createThreadRange(paragraphIndex, rangeEntry.paragraphId, rangeEntry.startOffset, rangeEntry.endOffset)
-        const paragraph = paragraphIndex.byId.get(rangeEntry.paragraphId)
-        const clientRects = range
-          ? Array.from(range.getClientRects()).filter(rect => rect.width > 0 && rect.height > 0)
-          : []
-        const fallbackRects = clientRects.length
-          ? clientRects
-          : resolution.status === ANCHOR_DETACHED && paragraph && paragraph.element
-            ? [paragraph.element.getBoundingClientRect()]
-            : []
-
-        fallbackRects.forEach((rect, rectIndex) => {
-          if (!rect) {
-            return
-          }
-
-          segments.push({
-            key: `${thread.id}:${rangeEntry.paragraphId}:${index}:${rectIndex}`,
-            threadId: thread.id,
-            clickable: this.marginThreads.some(candidate => candidate && candidate.id === thread.id),
-            detached: resolution.status === ANCHOR_DETACHED,
-            style: {
-              left: `${Math.max(0, rect.left - editorRect.left)}px`,
-              top: `${Math.max(0, rect.bottom - editorRect.top - HIGHLIGHT_HEIGHT)}px`,
-              width: `${Math.max(0, rect.width)}px`,
-              height: `${HIGHLIGHT_HEIGHT}px`
+      return ranges
+        .map((rangeEntry, index) => {
+          const range = this.createThreadRange(paragraphIndex, rangeEntry.paragraphId, rangeEntry.startOffset, rangeEntry.endOffset)
+          return range
+            ? {
+              key: `${thread.id}:${rangeEntry.paragraphId}:${index}`,
+              threadId: thread.id,
+              detached: resolution.status === ANCHOR_DETACHED,
+              clickable: this.marginThreads.some(candidate => candidate && candidate.id === thread.id),
+              range
             }
-          })
+            : null
         })
-      })
+        .filter(Boolean)
+    },
 
-      return segments
+    clearNativeHighlights () {
+      if (supportsCssHighlights()) {
+        CSS.highlights.delete(HIGHLIGHT_NAME)
+      }
+    },
+
+    applyNativeHighlights (threadRanges) {
+      if (!supportsCssHighlights()) {
+        return false
+      }
+
+      const attachedRanges = threadRanges
+        .filter(entry => !entry.detached)
+        .map(entry => entry.range)
+
+      if (!attachedRanges.length) {
+        this.clearNativeHighlights()
+        return true
+      }
+
+      CSS.highlights.set(HIGHLIGHT_NAME, new window.Highlight(...attachedRanges))
+      return true
     },
 
     refreshResolvedThreads () {
-      const editorRect = this.getEditorContainerRect()
-      if (!editorRect) {
-        this.visibleSegments = []
+      const editorContainer = this.getEditorContainer()
+      if (!editorContainer) {
+        this.interactiveRanges = []
+        this.clearNativeHighlights()
         return
       }
 
@@ -300,7 +290,9 @@ export default {
         .filter(thread => this.highlightedThreadIds.has(thread.id))
         .map(thread => resolveMarginThread(thread, paragraphIndex.list))
 
-      this.visibleSegments = threads.flatMap(thread => this.resolveThreadRanges(thread, paragraphIndex, editorRect))
+      const threadRanges = threads.flatMap(thread => this.buildThreadRanges(thread, paragraphIndex))
+      this.interactiveRanges = threadRanges.slice()
+      this.applyNativeHighlights(threadRanges)
     },
 
     scheduleRefresh () {
@@ -325,10 +317,44 @@ export default {
       const container = this.getEditorContainer()
       if (container) {
         this.scrollContainer = container
-        this.scrollListener = () => {
-          this.scheduleRefresh()
+
+        this.clickListener = event => {
+          const caretRange = typeof document.caretRangeFromPoint === 'function'
+            ? document.caretRangeFromPoint(event.clientX, event.clientY)
+            : null
+          const caretPosition = !caretRange && typeof document.caretPositionFromPoint === 'function'
+            ? document.caretPositionFromPoint(event.clientX, event.clientY)
+            : null
+          const node = caretRange
+            ? caretRange.startContainer
+            : (caretPosition ? caretPosition.offsetNode : null)
+          const offset = caretRange
+            ? caretRange.startOffset
+            : (caretPosition ? caretPosition.offset : null)
+
+          if (!node || !Number.isFinite(offset)) {
+            return
+          }
+
+          const match = this.interactiveRanges.find(entry => {
+            if (!entry || !entry.range || typeof entry.range.comparePoint !== 'function') {
+              return false
+            }
+
+            try {
+              return entry.range.comparePoint(node, offset) === 0
+            } catch (error) {
+              return false
+            }
+          })
+
+          if (match) {
+            event.preventDefault()
+            this.activateThread(match.threadId)
+          }
         }
-        container.addEventListener('scroll', this.scrollListener, { passive: true })
+
+        container.addEventListener('click', this.clickListener, true)
 
         if (typeof ResizeObserver !== 'undefined') {
           this.resizeObserver = new ResizeObserver(() => {
@@ -345,15 +371,15 @@ export default {
         this.resizeListener = null
       }
 
-      if (this.scrollContainer && this.scrollListener) {
-        this.scrollContainer.removeEventListener('scroll', this.scrollListener)
+      if (this.scrollContainer && this.clickListener) {
+        this.scrollContainer.removeEventListener('click', this.clickListener, true)
       }
       if (this.resizeObserver) {
         this.resizeObserver.disconnect()
         this.resizeObserver = null
       }
       this.scrollContainer = null
-      this.scrollListener = null
+      this.clickListener = null
     },
 
     activateThread (threadId) {
@@ -366,30 +392,3 @@ export default {
   }
 }
 </script>
-
-<style scoped>
-  .flowrite-margin-highlights {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  .flowrite-margin-highlight {
-    position: absolute;
-    border-radius: 999px;
-    background: linear-gradient(to top, rgba(210, 153, 51, 0.18) 0, rgba(210, 153, 51, 0.18) 42%, transparent 42%);
-    border-bottom: 2px solid rgba(210, 153, 51, 0.72);
-  }
-
-  .flowrite-margin-highlight.is-clickable {
-    pointer-events: auto;
-    cursor: pointer;
-  }
-
-  .flowrite-margin-highlight.is-detached {
-    opacity: 0.84;
-    background: rgba(186, 203, 220, 0.18);
-    border-bottom-color: rgba(129, 150, 175, 0.72);
-  }
-</style>

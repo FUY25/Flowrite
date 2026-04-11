@@ -70,11 +70,8 @@ export default {
       threadPositionCache: {},
       railHeight: 0,
       rafId: null,
-      mutationObserver: null,
-      mutationTarget: null,
       resizeObserver: null,
       resizeListener: null,
-      scrollListener: null,
       scrollContainer: null
     }
   },
@@ -164,11 +161,6 @@ export default {
       return container ? container.getBoundingClientRect() : null
     },
 
-    getRailRect () {
-      const rail = this.getRailElement()
-      return rail ? rail.getBoundingClientRect() : null
-    },
-
     buildFallbackParagraphIndex () {
       const root = this.getEditorShell()
       if (!root) {
@@ -196,7 +188,7 @@ export default {
         : this.buildFallbackParagraphIndex()
     },
 
-    getFallbackThreadTop (threadId, railRect, paragraphIndex) {
+    getFallbackThreadTop (threadId, editorRect, editorContainer, paragraphIndex) {
       const cachedTop = this.threadPositionCache[threadId]
       if (Number.isFinite(cachedTop)) {
         return cachedTop
@@ -209,14 +201,14 @@ export default {
         ? fallbackParagraph.element.getBoundingClientRect()
         : null
 
-      if (!fallbackRect || !railRect) {
+      if (!fallbackRect || !editorRect || !editorContainer) {
         return 0
       }
 
-      return Math.max(0, fallbackRect.top - railRect.top + DOT_VERTICAL_OFFSET)
+      return Math.max(0, fallbackRect.top - editorRect.top + editorContainer.scrollTop + DOT_VERTICAL_OFFSET)
     },
 
-    resolveThreadPosition (thread, paragraphIndex, railRect) {
+    resolveThreadPosition (thread, paragraphIndex, editorRect, editorContainer) {
       const resolution = thread.resolvedAnchor || {}
       const ranges = Array.isArray(resolution.ranges) && resolution.ranges.length
         ? resolution.ranges
@@ -231,7 +223,7 @@ export default {
         }]
 
       const firstRange = ranges[0]
-      if (!firstRange || !railRect) {
+      if (!firstRange || !editorRect || !editorContainer) {
         return null
       }
 
@@ -246,14 +238,14 @@ export default {
         }
 
         return {
-          top: this.getFallbackThreadTop(thread.id, railRect, paragraphIndex),
+          top: this.getFallbackThreadTop(thread.id, editorRect, editorContainer, paragraphIndex),
           status: resolution.status || '',
           detached: true
         }
       }
 
       return {
-        top: Math.max(0, rect.top - railRect.top + DOT_VERTICAL_OFFSET),
+        top: Math.max(0, rect.top - editorRect.top + editorContainer.scrollTop + DOT_VERTICAL_OFFSET),
         status: resolution.status || '',
         detached: resolution.status === ANCHOR_DETACHED
       }
@@ -272,8 +264,9 @@ export default {
     },
 
     refreshResolvedThreads () {
-      const railRect = this.getRailRect()
-      if (!railRect) {
+      const editorContainer = this.getEditorContainer()
+      const editorRect = this.getEditorContainerRect()
+      if (!editorRect || !editorContainer) {
         this.positionedThreads = []
         this.railHeight = 0
         return
@@ -283,7 +276,7 @@ export default {
       const threads = this.marginThreads
         .map((thread, order) => {
           const resolvedThread = resolveMarginThread(thread, paragraphIndex.list)
-          const position = this.resolveThreadPosition(resolvedThread, paragraphIndex, railRect)
+          const position = this.resolveThreadPosition(resolvedThread, paragraphIndex, editorRect, editorContainer)
           if (!position) {
             return null
           }
@@ -309,9 +302,12 @@ export default {
         cache[thread.id] = thread.top
         return cache
       }, { ...this.threadPositionCache })
-      this.railHeight = this.positionedThreads.length
-        ? this.positionedThreads[this.positionedThreads.length - 1].bottom + THREAD_GAP
-        : 0
+      this.railHeight = Math.max(
+        editorContainer.scrollHeight,
+        this.positionedThreads.length
+          ? this.positionedThreads[this.positionedThreads.length - 1].bottom + THREAD_GAP
+          : 0
+      )
 
       this.$nextTick(() => {
         this.syncThreadHeights()
@@ -369,10 +365,6 @@ export default {
       const container = this.getEditorContainer()
       if (container) {
         this.scrollContainer = container
-        this.scrollListener = () => {
-          this.scheduleRefresh()
-        }
-        container.addEventListener('scroll', this.scrollListener, { passive: true })
 
         if (typeof ResizeObserver !== 'undefined') {
           this.resizeObserver = new ResizeObserver(() => {
@@ -380,21 +372,6 @@ export default {
           })
           this.resizeObserver.observe(container)
         }
-      }
-
-      const mutationTarget = this.getEditorShell()
-      if (mutationTarget && typeof MutationObserver !== 'undefined') {
-        this.mutationTarget = mutationTarget
-        this.mutationObserver = new MutationObserver(() => {
-          this.scheduleRefresh()
-        })
-        this.mutationObserver.observe(mutationTarget, {
-          childList: true,
-          subtree: true,
-          characterData: true,
-          attributes: true,
-          attributeFilter: ['id']
-        })
       }
     },
 
@@ -404,23 +381,11 @@ export default {
         this.resizeListener = null
       }
 
-      if (this.scrollContainer && this.scrollListener) {
-        this.scrollContainer.removeEventListener('scroll', this.scrollListener)
-      }
-
       if (this.resizeObserver) {
         this.resizeObserver.disconnect()
         this.resizeObserver = null
       }
-
-      if (this.mutationObserver) {
-        this.mutationObserver.disconnect()
-        this.mutationObserver = null
-      }
-
-      this.mutationTarget = null
       this.scrollContainer = null
-      this.scrollListener = null
     },
 
     isDetached (thread) {

@@ -780,6 +780,13 @@ img {
   max-width: 100%;
 }
 
+u,
+ins {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.12em;
+  text-decoration-skip-ink: auto;
+}
+
 hr {
   cursor: default;
 }

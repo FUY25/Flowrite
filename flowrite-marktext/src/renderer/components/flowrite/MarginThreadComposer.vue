@@ -1,7 +1,7 @@
 <template>
-  <article
+  <div
     v-if="anchor"
-    class="flowrite-margin-composer"
+    class="flowrite-margin-thread-composer"
     data-testid="flowrite-margin-thread-composer"
     @click.stop
     @mousedown.stop
@@ -10,62 +10,26 @@
     @keyup.stop
     @input.stop
   >
-    <div class="flowrite-margin-composer__surface">
-      <div class="flowrite-margin-composer__header">
-        <p class="flowrite-margin-composer__title">
-          Ask Flowrite
-        </p>
-        <button
-          type="button"
-          class="flowrite-margin-composer__close"
-          data-testid="flowrite-margin-thread-close"
-          aria-label="Close Ask Flowrite composer"
-          @click="closeComposer"
-        >
-          ×
-        </button>
-      </div>
-
-      <p class="flowrite-margin-composer__quote">
-        "{{ anchor.quote }}"
-      </p>
-
-      <textarea
-        ref="textarea"
-        v-model="draft"
-        class="flowrite-margin-composer__input"
-        data-testid="flowrite-margin-thread-input"
-        :disabled="submitting"
-        rows="4"
-        placeholder="Ask Flowrite about this passage"
-      ></textarea>
-
-      <p
-        v-if="error"
-        class="flowrite-margin-composer__error"
-      >
-        {{ error }}
-      </p>
-
-      <div class="flowrite-margin-composer__footer">
-        <button
-          type="button"
-          class="flowrite-margin-composer__submit"
-          data-testid="flowrite-margin-thread-submit"
-          :disabled="submitting || !trimmedDraft"
-          @click="submit"
-        >
-          {{ submitting ? 'Posting…' : 'Comment' }}
-        </button>
-      </div>
-    </div>
-  </article>
+    <margin-thread-card
+      composer
+      :positioned="false"
+      :anchor="anchor"
+      :submitting="submitting"
+      :error="error"
+      @submit-composer="submitComposer"
+      @close-composer="closeComposer"
+    ></margin-thread-card>
+  </div>
 </template>
 
 <script>
 import { SCOPE_MARGIN } from '../../../flowrite/constants'
+import MarginThreadCard from './MarginThreadCard.vue'
 
 export default {
+  components: {
+    MarginThreadCard
+  },
   props: {
     anchor: {
       type: Object,
@@ -74,28 +38,16 @@ export default {
   },
   data () {
     return {
-      draft: '',
       submitting: false,
       error: ''
-    }
-  },
-  computed: {
-    trimmedDraft () {
-      return this.draft.trim()
     }
   },
   watch: {
     anchor: {
       immediate: true,
       handler () {
-        this.draft = ''
         this.submitting = false
         this.error = ''
-        this.$nextTick(() => {
-          if (this.$refs.textarea) {
-            this.$refs.textarea.focus()
-          }
-        })
       }
     }
   },
@@ -131,12 +83,15 @@ export default {
       ))
     },
 
-    async submit () {
-      if (!this.trimmedDraft || this.submitting) {
+    async submitComposer ({ body, anchor, resolve, reject } = {}) {
+      if (!body || !anchor || this.submitting) {
+        if (typeof reject === 'function') {
+          reject(new Error('Unable to post this margin comment.'))
+        }
         return
       }
 
-      const pendingBody = this.trimmedDraft
+      const pendingBody = body.trim()
       this.submitting = true
       this.error = ''
       let unwatch = null
@@ -144,7 +99,7 @@ export default {
       try {
         const submitPromise = this.$store.dispatch('SUBMIT_MARGIN_COMMENT', {
           body: pendingBody,
-          anchor: this.anchor
+          anchor
         })
 
         unwatch = this.$store.watch(
@@ -162,11 +117,22 @@ export default {
 
         await submitPromise
         this.closeAfterPersist(pendingBody)
+
+        if (typeof resolve === 'function') {
+          resolve()
+        }
       } catch (error) {
         if (this.closeAfterPersist(pendingBody)) {
+          if (typeof resolve === 'function') {
+            resolve()
+          }
           return
         }
+
         this.error = error && error.message ? error.message : 'Unable to post this margin comment.'
+        if (typeof reject === 'function') {
+          reject(error)
+        }
       } finally {
         if (unwatch) {
           unwatch()
@@ -187,104 +153,10 @@ export default {
 </script>
 
 <style scoped>
-  .flowrite-margin-composer {
+  .flowrite-margin-thread-composer {
     margin: 0 0 14px;
     position: relative;
     z-index: 2;
     pointer-events: auto;
-  }
-
-  .flowrite-margin-composer__surface {
-    position: relative;
-    z-index: 2;
-    border: 1px solid rgba(52, 60, 72, 0.11);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 8px 22px rgba(26, 33, 44, 0.06);
-    padding: 14px 16px;
-  }
-
-  .flowrite-margin-composer__header,
-  .flowrite-margin-composer__footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .flowrite-margin-composer__title {
-    margin: 0;
-    color: rgba(44, 49, 58, 0.92);
-    font-size: 13px;
-    font-weight: 700;
-  }
-
-  .flowrite-margin-composer__close {
-    appearance: none;
-    border: 1px solid rgba(221, 225, 232, 0.96);
-    border-radius: 999px;
-    background: rgba(248, 249, 251, 0.98);
-    color: rgba(116, 123, 136, 0.88);
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    padding: 5px 8px;
-  }
-
-  .flowrite-margin-composer__quote {
-    margin: 10px 0 12px;
-    color: rgba(116, 123, 136, 0.88);
-    font-size: 13px;
-    line-height: 1.5;
-  }
-
-  .flowrite-margin-composer__input {
-    width: 100%;
-    border: 1px solid rgba(221, 225, 232, 0.96);
-    border-radius: 14px;
-    background: rgba(248, 249, 251, 0.98);
-    color: var(--editorColor);
-    font-size: 14px;
-    line-height: 1.5;
-    min-height: 88px;
-    padding: 11px 13px;
-    resize: vertical;
-  }
-
-  .flowrite-margin-composer__input:focus {
-    border-color: rgba(210, 153, 51, 0.34);
-    outline: none;
-  }
-
-  .flowrite-margin-composer__error {
-    margin: 10px 0 0;
-    color: #9b4d3a;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-
-  .flowrite-margin-composer__footer {
-    margin-top: 12px;
-    justify-content: flex-end;
-  }
-
-  .flowrite-margin-composer__submit {
-    appearance: none;
-    border: 1px solid rgba(210, 153, 51, 0.2);
-    border-radius: 999px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 700;
-    padding: 8px 14px;
-  }
-
-  .flowrite-margin-composer__submit {
-    background: rgba(247, 240, 224, 0.98);
-    color: rgba(106, 79, 24, 0.96);
-  }
-
-  .flowrite-margin-composer__submit:disabled {
-    cursor: not-allowed;
-    opacity: 0.65;
   }
 </style>

@@ -8,7 +8,7 @@
   >
     <div
       class="editor-shell"
-      :class="{ 'annotations-open': !sourceCode && showAnnotationsPane }"
+      :class="{ 'annotations-open': !sourceCode && showAnnotationsPane && hasVisibleMarginAnnotations }"
     >
       <div class="editor-main">
         <div
@@ -17,6 +17,7 @@
         ></div>
         <div
           v-if="!sourceCode"
+          ref="marginOverlays"
           class="editor-main__margin-overlays"
         >
           <margin-anchor-highlights
@@ -117,7 +118,6 @@ import ImageSelector from 'muya/lib/ui/imageSelector'
 import ImageToolbar from 'muya/lib/ui/imageToolbar'
 import Transformer from 'muya/lib/ui/transformer'
 import FormatPicker from 'muya/lib/ui/formatPicker'
-import FlowriteSelectionMenu from 'muya/lib/ui/flowriteSelectionMenu'
 import LinkTools from 'muya/lib/ui/linkTools'
 import FootnoteTool from 'muya/lib/ui/footnoteTool'
 import TableBarTools from 'muya/lib/ui/tableTools'
@@ -206,12 +206,22 @@ export default {
       projectTree: state => state.project.projectTree,
       showSideBar: state => state.layout.showSideBar,
       showAnnotationsPane: state => state.flowrite.showAnnotationsPane,
+      flowriteComments: state => state.flowrite.comments,
+      composerMarginThread: state => state.flowrite.composerMarginThread,
 
       // edit modes
       typewriter: state => state.preferences.typewriter,
       focus: state => state.preferences.focus,
       sourceCode: state => state.preferences.sourceCode
-    })
+    }),
+
+    hasVisibleMarginAnnotations () {
+      const hasMarginComments = Array.isArray(this.flowriteComments) && this.flowriteComments.some(thread => {
+        return thread && thread.scope === 'margin'
+      })
+
+      return hasMarginComments || Boolean(this.composerMarginThread)
+    }
   },
 
   data () {
@@ -257,6 +267,8 @@ export default {
     },
 
     showAnnotationsPane () {
+      this.editor && this.editor.hideAllFloatTools()
+      this.$nextTick(() => this.mountMarginOverlays())
       this.scheduleAnnotationLayoutSync()
     },
 
@@ -264,6 +276,8 @@ export default {
       if (value) {
         this.$store.dispatch('SET_DISTRACTION_FREE_WRITING', false)
       }
+      this.editor && this.editor.hideAllFloatTools()
+      this.$nextTick(() => this.mountMarginOverlays())
       this.scheduleAnnotationLayoutSync()
     },
 
@@ -519,6 +533,8 @@ export default {
       }
       if (value) {
         this.$store.dispatch('SET_DISTRACTION_FREE_WRITING', false)
+      } else {
+        this.$nextTick(() => this.mountMarginOverlays())
       }
     }
 
@@ -572,7 +588,6 @@ export default {
       Muya.use(Transformer)
       Muya.use(ImageToolbar)
       Muya.use(FormatPicker)
-      Muya.use(FlowriteSelectionMenu)
       Muya.use(FrontMenu)
       Muya.use(LinkTools, {
         jumpClick: this.jumpClick
@@ -628,6 +643,7 @@ export default {
       this.$emit('flowrite-scroll-container-ready', container)
       container.addEventListener('focusin', this.handleEditorFocusIn, true)
       container.addEventListener('focusout', this.handleEditorFocusOut, true)
+      this.mountMarginOverlays()
       this.attachMarginParagraphObserver()
       this.scheduleMarginParagraphIndexRefresh()
 
@@ -997,6 +1013,19 @@ export default {
       this.imageViewerVisible = status
     },
 
+    mountMarginOverlays () {
+      const overlayHost = this.$refs.marginOverlays
+      const container = this.editor && this.editor.container
+
+      if (!overlayHost || !container || overlayHost.parentElement === container) {
+        return
+      }
+
+      overlayHost.setAttribute('contenteditable', 'false')
+      overlayHost.setAttribute('tabindex', '-1')
+      container.appendChild(overlayHost)
+    },
+
     switchSpellcheckLanguage (languageCode) {
       const { spellchecker } = this
       const { isEnabled } = spellchecker
@@ -1333,7 +1362,7 @@ export default {
     },
 
     syncAnnotationLayout () {
-      if (!this.showAnnotationsPane || this.sourceCode) {
+      if (!this.showAnnotationsPane || this.sourceCode || !this.hasVisibleMarginAnnotations) {
         return
       }
 
@@ -1438,6 +1467,7 @@ export default {
     overflow: auto;
     box-sizing: border-box;
     cursor: default;
+    position: relative;
   }
 
   .editor-shell {
@@ -1462,10 +1492,22 @@ export default {
 
   .editor-main__margin-overlays {
     position: absolute;
-    inset: 0;
-    overflow: hidden;
+    top: 0;
+    right: 0;
+    width: min(280px, max(248px, 24vw));
+    min-height: 100%;
+    overflow: visible;
     pointer-events: none;
     z-index: 4;
+  }
+
+  ::highlight(flowrite-margin-anchor-active) {
+    background-color: rgba(210, 153, 51, 0.10);
+    text-decoration-line: underline;
+    text-decoration-style: solid;
+    text-decoration-color: rgba(210, 153, 51, 0.72);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.14em;
   }
 
   .typewriter .editor-component {

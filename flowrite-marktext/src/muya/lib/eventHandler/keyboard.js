@@ -1,4 +1,4 @@
-import { EVENT_KEYS } from '../config'
+import { EVENT_KEYS, HAS_TEXT_BLOCK_REG } from '../config'
 import selection from '../selection'
 import { findNearestParagraph } from '../selection/dom'
 import { getParagraphReference, getImageInfo } from '../utils'
@@ -82,6 +82,11 @@ class Keyboard {
 
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
+        const { start: nextStart, end: nextEnd } = selection.getCursorRange()
+        if (!nextStart || !nextEnd) {
+          return
+        }
+
         this.muya.dispatchSelectionChange()
         this.muya.dispatchSelectionFormats()
         if (!this.isComposed && event.type === 'click') {
@@ -275,11 +280,17 @@ class Keyboard {
       }
 
       const block = contentState.getBlock(anchor.key)
+      const endBlock = contentState.getBlock(focus.key)
       if (
-        anchor.key === focus.key &&
-        anchor.offset !== focus.offset &&
+        (anchor.key !== focus.key || anchor.offset !== focus.offset) &&
+        block &&
+        endBlock &&
+        HAS_TEXT_BLOCK_REG.test(block.type) &&
+        HAS_TEXT_BLOCK_REG.test(endBlock.type) &&
         block.functionType !== 'codeContent' &&
-        block.functionType !== 'languageInput'
+        block.functionType !== 'languageInput' &&
+        endBlock.functionType !== 'codeContent' &&
+        endBlock.functionType !== 'languageInput'
       ) {
         const reference = contentState.getPositionReference()
         const { formats } = contentState.selectionFormats()

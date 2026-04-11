@@ -95,15 +95,16 @@
 }
 
 ::-webkit-scrollbar:vertical {
-  width: 12px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--editorColor10);
+  background: rgba(0, 0, 0, .12);
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--editorColor30);
+  background: rgba(0, 0, 0, .22);
 }
 
 :focus {

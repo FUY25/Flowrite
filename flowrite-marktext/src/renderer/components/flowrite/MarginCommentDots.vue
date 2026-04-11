@@ -51,12 +51,8 @@ export default {
       resolvedThreads: [],
       threadPositionCache: {},
       rafId: null,
-      scrollContainer: null,
-      mutationObserver: null,
-      mutationTarget: null,
       resizeObserver: null,
-      resizeListener: null,
-      scrollListener: null
+      resizeListener: null
     }
   },
   computed: {
@@ -169,7 +165,7 @@ export default {
         : this.buildFallbackParagraphIndex()
     },
 
-    getFallbackDotTop (threadId, editorRect, paragraphIndex) {
+    getFallbackDotTop (threadId, editorRect, editorContainer, paragraphIndex) {
       const cachedTop = this.threadPositionCache[threadId]
       if (Number.isFinite(cachedTop)) {
         return cachedTop
@@ -182,14 +178,14 @@ export default {
         ? fallbackParagraph.element.getBoundingClientRect()
         : null
 
-      if (!fallbackRect || !editorRect) {
+      if (!fallbackRect || !editorRect || !editorContainer) {
         return 0
       }
 
-      return Math.max(0, fallbackRect.top - editorRect.top + DOT_VERTICAL_OFFSET)
+      return Math.max(0, fallbackRect.top - editorRect.top + editorContainer.scrollTop + DOT_VERTICAL_OFFSET)
     },
 
-    resolveThreadPosition (thread, paragraphIndex, editorRect) {
+    resolveThreadPosition (thread, paragraphIndex, editorRect, editorContainer) {
       const resolution = thread.resolvedAnchor || {}
       const ranges = Array.isArray(resolution.ranges) && resolution.ranges.length
         ? resolution.ranges
@@ -219,22 +215,23 @@ export default {
         }
 
         return {
-          top: this.getFallbackDotTop(thread.id, editorRect, paragraphIndex),
+          top: this.getFallbackDotTop(thread.id, editorRect, editorContainer, paragraphIndex),
           status: resolution.status || '',
           detached: true
         }
       }
 
       return {
-        top: Math.max(0, rect.top - editorRect.top + DOT_VERTICAL_OFFSET),
+        top: Math.max(0, rect.top - editorRect.top + editorContainer.scrollTop + DOT_VERTICAL_OFFSET),
         status: resolution.status || '',
         detached: resolution.status === ANCHOR_DETACHED
       }
     },
 
     refreshResolvedThreads () {
+      const editorContainer = this.getEditorContainer()
       const editorRect = this.getEditorContainerRect()
-      if (!editorRect) {
+      if (!editorRect || !editorContainer) {
         this.resolvedThreads = []
         return
       }
@@ -243,7 +240,7 @@ export default {
       this.resolvedThreads = this.marginThreads
         .map(thread => {
           const resolvedThread = resolveMarginThread(thread, paragraphIndex.list)
-          const position = this.resolveThreadPosition(resolvedThread, paragraphIndex, editorRect)
+          const position = this.resolveThreadPosition(resolvedThread, paragraphIndex, editorRect, editorContainer)
           if (!position) {
             return null
           }
@@ -283,33 +280,12 @@ export default {
 
       const container = this.getEditorContainer()
       if (container) {
-        this.scrollContainer = container
-        this.scrollListener = () => {
-          this.scheduleRefresh()
-        }
-        container.addEventListener('scroll', this.scrollListener, { passive: true })
-
         if (typeof ResizeObserver !== 'undefined') {
           this.resizeObserver = new ResizeObserver(() => {
             this.scheduleRefresh()
           })
           this.resizeObserver.observe(container)
         }
-      }
-
-      const mutationTarget = this.getEditorShell()
-      if (mutationTarget && typeof MutationObserver !== 'undefined') {
-        this.mutationTarget = mutationTarget
-        this.mutationObserver = new MutationObserver(() => {
-          this.scheduleRefresh()
-        })
-        this.mutationObserver.observe(mutationTarget, {
-          childList: true,
-          subtree: true,
-          characterData: true,
-          attributes: true,
-          attributeFilter: ['id']
-        })
       }
     },
 
@@ -319,20 +295,10 @@ export default {
         this.resizeListener = null
       }
 
-      if (this.scrollContainer && this.scrollListener) {
-        this.scrollContainer.removeEventListener('scroll', this.scrollListener)
-      }
       if (this.resizeObserver) {
         this.resizeObserver.disconnect()
         this.resizeObserver = null
       }
-      if (this.mutationObserver) {
-        this.mutationObserver.disconnect()
-        this.mutationObserver = null
-      }
-      this.mutationTarget = null
-      this.scrollContainer = null
-      this.scrollListener = null
     },
 
     isActive (threadId) {
