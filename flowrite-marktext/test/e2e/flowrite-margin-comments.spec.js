@@ -60,6 +60,57 @@ const selectTextInEditor = async (page, targetText) => {
   }, targetText)
 }
 
+const selectTextRangeInEditor = async (page, startText, endText) => {
+  await page.evaluate(({ startText, endText }) => {
+    const paragraphs = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+    const startParagraph = paragraphs.find(node => node.textContent.includes(startText))
+    const endParagraph = paragraphs.find(node => node.textContent.includes(endText))
+
+    if (!startParagraph || !endParagraph) {
+      throw new Error(`Unable to find paragraphs for "${startText}" -> "${endText}".`)
+    }
+
+    const findTextPosition = (paragraph, text, useTextEnd = false) => {
+      const fullText = paragraph.textContent || ''
+      const startIndex = fullText.indexOf(text)
+      if (startIndex === -1) {
+        throw new Error(`Unable to find "${text}" in paragraph.`)
+      }
+      const targetIndex = useTextEnd ? startIndex + text.length : startIndex
+      const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
+      let consumed = 0
+      let node
+      while ((node = walker.nextNode())) {
+        const nextConsumed = consumed + node.textContent.length
+        if (targetIndex >= consumed && targetIndex <= nextConsumed) {
+          return {
+            node,
+            offset: targetIndex - consumed
+          }
+        }
+        consumed = nextConsumed
+      }
+      throw new Error(`Unable to map DOM range for "${text}".`)
+    }
+
+    const start = findTextPosition(startParagraph, startText, false)
+    const end = findTextPosition(endParagraph, endText, true)
+    const range = document.createRange()
+    range.setStart(start.node, start.offset)
+    range.setEnd(end.node, end.offset)
+
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const editorContainer = document.querySelector('.editor-wrapper .editor-component > div')
+    editorContainer.dispatchEvent(new KeyboardEvent('keyup', {
+      key: 'Shift',
+      bubbles: true
+    }))
+  }, { startText, endText })
+}
+
 const setComposerDraft = async (page, body) => {
   const input = page.locator('[data-testid="flowrite-margin-thread-input"]').last()
   await input.waitFor({ state: 'visible' })
@@ -67,6 +118,70 @@ const setComposerDraft = async (page, body) => {
 }
 
 test.describe('Flowrite margin comments', () => {
+  test('shows Ask Flowrite for sentence selection', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-selection-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n\nA later paragraph that lands with a sharper note.\n', 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], { userDataDir })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await selectTextInEditor(page, 'reflective paragraph with a soft cadence')
+      await expect(page.getByRole('button', { name: 'Ask Flowrite' })).toBeVisible()
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('shows Ask Flowrite for multi-paragraph selection', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-multiparagraph-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with a soft cadence.\n\nA later paragraph that lands with a sharper note.\n', 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], { userDataDir })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await selectTextRangeInEditor(page, 'reflective paragraph', 'sharper note')
+      await expect(page.getByRole('button', { name: 'Ask Flowrite' })).toBeVisible()
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   test('opens the Ask Flowrite composer from a selection and posts a margin comment in the rail', async () => {
     test.setTimeout(60000)
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-'))
