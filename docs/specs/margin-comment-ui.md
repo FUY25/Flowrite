@@ -80,6 +80,18 @@ The card style should follow the Notion-like floating direction that was approve
 
 Cards should read as annotation objects placed in the page margin, not as chat bubbles or utility widgets.
 
+### Thread Structure
+
+One thread with many messages should read as a single vertical conversation object.
+
+Approved direction:
+
+- messages in the same thread are connected by a thin vertical spine
+- avatar markers align on a single vertical axis
+- the thread feels like one stacked conversation, not separate mini-cards
+
+This should resemble the reference thread structure shown in review, where multiple messages inside one thread are visually linked by a light connector line.
+
 ### Default Visibility
 
 Existing comments remain visible as full cards by default.
@@ -183,7 +195,13 @@ For multi-paragraph comments:
 - middle paragraphs show covered range cleanly
 - end paragraph highlights to the end offset
 
-Even when the system falls back to paragraph-level placement, the visual result should still feel coherent and not sloppy.
+For attached anchors, accuracy should be treated as exact, not approximate:
+
+- exact sentence span when sentence-selected
+- exact paragraph span when paragraph-selected
+- exact multi-paragraph coverage across the stored range
+
+Paragraph-level fallback is acceptable only for detached/recovery situations, not for normal attached rendering.
 
 ## Card-To-Text Relationship
 
@@ -195,6 +213,8 @@ Requirements:
 - clicking a card makes that relationship persistent until focus changes
 - card position should sit beside the attached paragraph region, not drift into an unrelated zone
 
+Clicking the anchored text should focus the thread without causing viewport jump. The window should stay stable; the card may reflow locally to better align with the active anchored text.
+
 This relationship is more important than raw recency ordering. Cards are anchored to text, not sorted as a generic discussion list.
 
 ## Overlap And Crowding
@@ -203,17 +223,42 @@ There is already a crowding strategy in the current implementation. This spec ke
 
 ### Default Position
 
-Each card gets a natural position based on its anchor location.
+Each card gets a natural position based on the **start point of its anchor**.
 
-### Push-Down Behavior
+The natural card location should feel vertically centered against the starting point of the selected/commented range, not just roughly attached to the paragraph top.
 
-When a new card would overlap an existing card:
+### Stable Insertion Reflow
 
-- the upper card keeps its position
-- the lower card moves down to clear the overlap
-- this cascades if necessary
+When a new card is inserted, or when a card expands and would overlap nearby cards:
 
-This movement should feel like cards making room for one another in the page margin, not like items inside a separate scrolling list.
+- cards should reflow like stable insertion in a spreadsheet or outline
+- each card keeps its document-order relationship to nearby anchors
+- neighboring cards move up or down just enough to maintain:
+  - anchor order
+  - non-overlap
+  - proximity to their own natural anchor positions
+
+This is stronger than a simple push-down-only stack. The goal is to preserve relative anchor alignment across the cluster, not just keep pushing later cards downward forever.
+
+### Focus Without Jump
+
+When the user clicks an anchored sentence or paragraph:
+
+- do not auto-scroll the window
+- activate the related thread
+- allow local layout reflow so the card can sit closer to the same vertical level as the anchored text
+- keep the movement local and ordered, not jumpy
+
+The page should feel stable while the margin comments reorganize around the active thread.
+
+### Motion
+
+Local card reflow should animate softly:
+
+- short duration, around `140–180ms`
+- restrained easing
+- enough to make the movement understandable
+- not floaty or dramatic
 
 ### Compression
 
