@@ -1,554 +1,285 @@
 # Margin Comment UI Spec
 
-Date: 2026-04-10
+Date: 2026-04-11
 
 ## Overview
 
-Margin comments are Flowrite's primary interaction surface — the place where the writer and AI think together about specific passages. They must feel like quiet marginalia on a calm writing surface, not a chat sidebar or collaboration tool.
+Flowrite margin comments are a document-attached annotation system, not a side chat panel.
 
-The interaction model is **comment-native**: the writer selects text, asks a question or leaves an observation, and the AI responds as a thoughtful reading companion. AI responses are short and human-feeling — a sentence or two, not multi-paragraph analysis.
+The target interaction is closer to Notion's margin comments than to a separate review rail:
 
-Comments can also serve as the starting point for generation tasks. When a discussion in the margin leads the writer to want new or rewritten content, the AI can produce output that flows back into the document — but the conversational part stays in the comment thread.
+- one shared document scroll
+- comments visually attached in the right page margin
+- no separate comment pane feeling
+- no second internal comment scroll
+- cards remain visible by default and only compress when a region gets crowded
 
-Reference model: **Notion's inline margin comments**, adapted for a focused writing environment.
+This spec covers **commenting UI only**. It does **not** include suggestion cards, rewrite surfaces, compose blocks, or other editing-specific behaviors.
 
----
+## Core Decisions
+
+- `Ask Flowrite` appears for **any non-empty text selection**
+  - one word
+  - sentence
+  - paragraph
+  - multi-paragraph selection
+- Comment cards live in the page margin inside the same document scroll surface.
+- Existing threads are shown as full cards by default.
+- Compression happens only when nearby threads overlap enough to crowd the region.
+- Dots are always visible.
+- Underline/highlight appears only on interaction.
+- New thread creation opens directly in input mode after `Ask Flowrite`.
+- Existing thread replies stay collapsed until the user clicks the card.
+- Thread delete is UI-only and does not alter AI memory/context.
 
 ## Layout Model
 
-### Document Shift
+### Integrated Margin
 
-A single button shows or hides the comment margin. When comments are **visible**, the editor content area shifts slightly left to make room for the margin column on the right. When comments are **hidden**, the editor returns to its default centered position.
+The comment surface is part of the editor canvas, not an `aside` with independent behavior.
 
-This mirrors the existing MarkText sidebar behavior where `editorWithTabs` already adjusts its width based on sidebar visibility. The margin comment column uses the same pattern.
+When annotations are visible:
 
-```
-Comments hidden:
-┌──────────────────────────────────────────────┐
-│            [ centered editor 750px ]         │
-│                                              │
-│   The quick brown fox jumps over the lazy    │
-│   dog. This paragraph explores the idea...   │
-│                                              │
-└──────────────────────────────────────────────┘
+- the document content remains the primary surface
+- a modest right margin is reserved for cards
+- cards are positioned against the document, not inside a separately framed rail
+- document text and comment cards move together under one scroll container
 
-Comments visible:
-┌──────────────────────────────────────────────┐
-│  [ editor shifted left ]    │ margin column  │
-│                             │   (~280px)     │
-│  The quick brown fox jumps  │  ┌──────────┐  │
-│  over the lazy dog. This    │  │ comment   │  │
-│  paragraph explores the...  │  │ card      │  │
-│                             │  └──────────┘  │
-└──────────────────────────────────────────────┘
-```
+When annotations are hidden:
 
-### Sidebar Behavior
+- the cards are hidden
+- dots remain visible in the gutter as the persistent index of commented passages
 
-When the comment margin opens and the window is narrow enough that the editor would become uncomfortable (<1100px with both sidebars), the **left sidebar auto-collapses** to give priority to the comment margin. The user can manually reopen the left sidebar at any time.
+### Width And Position
 
-### Margin Column
+Target margin width:
 
-- Fixed width: **280px**
-- Background: transparent (inherits editor background)
-- No visible border between editor and margin — they share the same surface
-- The margin column scrolls in sync with the editor content
-- Comment cards are positioned vertically to align with their anchor paragraph
+- default: `280px`
+- allowed shrink range on narrower windows: down to about `248px`
 
----
+The margin should feel like a narrow annotation zone, not a second workspace. The document must remain visually dominant on large monitors as well as standard laptop widths.
 
-## Show/Hide Comments Button
+There should be:
 
-A single button in the editor toolbar shows or hides the margin comment column.
+- no hard pane frame
+- no separate background treatment that reads like a sidebar
+- no second scrollbar for comments
 
-The button should be subtle and consistent with MarkText's existing toolbar style. Icon: a small margin-annotation glyph (not a chat bubble, not a sparkle). Tooltip: "Show comments" / "Hide comments."
+## Card Model
 
-### Transition
+### Card Appearance
 
-- The editor shift should animate smoothly (~200ms, ease-out)
-- Comment cards fade in after the shift completes (~100ms delay, ~150ms fade)
-- On hide: cards fade out first, then editor shifts back to center
+The card style should follow the Notion-like floating direction that was approved in review:
 
----
+- white or page-matched background
+- very light border
+- soft radius
+- minimal shadow
+- calm metadata row
+- visually lightweight enough to feel attached to the page
 
-## Indexing: How Text-to-Thread Connection Shows Across States
+Cards should read as annotation objects placed in the page margin, not as chat bubbles or utility widgets.
 
-The dot indicator is the **persistent index** — it's always visible in both states, telling the writer "you've thought about this passage before." The underline is the **active connection** that only appears on interaction.
+### Default Visibility
 
-### Comments Hidden
+Existing comments remain visible as full cards by default.
 
-- **Dots visible**: each paragraph with a comment thread shows its dot indicator in the right gutter. The dots are quiet enough (6px, 30% opacity) that they don't disrupt the writing surface, but they tell the writer where thinking has happened.
-- **No underlines**. No highlights. No margin column. Just dots in the gutter.
-- **Clicking a dot** when comments are hidden → opens the comment margin (same as clicking the show/hide button), scrolls to that thread's card, and shows the anchor underline for that thread.
+Do **not** shrink or fade inactive cards just because they are not selected.
 
-### Comments Visible
+Compression is only a crowding response, not the default idle state.
 
-- **Dots visible** (same position and appearance as hidden state)
-- **Underlines appear on interaction only** — hover a card or click a dot to show the muted green underline on the anchor text
-- **Thread cards** visible in the margin column, aligned with their anchor paragraphs
+### Composer Behavior
 
-### Summary
+For a **new** thread:
 
-| | Comments Hidden | Comments Visible |
-|---|---|---|
-| Dots | Visible | Visible |
-| Underlines | None | On hover/click only |
-| Thread cards | None | In margin column |
-| Click dot | Opens margin + scrolls to card + highlights | Scrolls to card + highlights |
+- user selects text
+- user clicks `Ask Flowrite`
+- a new card appears at the attached location
+- that card opens directly in input mode for the first comment
 
----
+For an **existing** thread:
 
-## Dot Indicators
+- the card remains visible
+- reply input is hidden by default
+- clicking the card opens the reply affordance
 
-Each paragraph with an associated comment thread shows a **dot indicator** in the right gutter of the editor. Dots are visible in both hidden and visible comment states.
+This keeps the page calm while still making the first-comment action direct.
 
-### Appearance
+## Selection Entry Point
 
-- Small circle, **6px diameter** (hit area: **24px** for comfortable clicking)
-- Color: `var(--editorColor30)` (muted, barely there)
-- Positioned at the vertical midpoint of the first line of the anchor paragraph
-- Sits in the right gutter of the editor text area
+`Ask Flowrite` is the only creation entry point from text selection.
+
+Requirements:
+
+- visible for any non-empty text selection
+- consistent across one-word, sentence, paragraph, and multi-paragraph selections
+- no special-case disappearance for longer selections
+
+The current behavior where one-word selection shows the action but sentence selection may not is a bug and must be fixed.
+
+## Dots
+
+Dots are the persistent index of commented text.
 
 ### Behavior
 
-- **Hover**: dot grows slightly (6px → 8px), color strengthens to `var(--editorColor50)`. Cursor: pointer.
-- **Click (comments visible)**: activates the thread — the corresponding text range gets a muted underline highlight, and the comment card in the margin scrolls into view (if not already visible) and receives a brief subtle emphasis (border color pulse).
-- **Click (comments hidden)**: opens the comment margin, then behaves the same as above — scrolls to card, shows underline.
-- **Multiple dots**: one dot per thread, stacked if multiple threads anchor to the same paragraph (vertically offset by ~12px).
-
-### No Highlight by Default
-
-Dots are visible but **text highlights are not shown by default** in either state. Highlights only appear when:
-- The user clicks a dot
-- The user hovers over a comment card in the margin (only possible when comments are visible)
-- The user is actively composing a new margin comment
-
-This keeps the writing surface clean. The dots are the quiet, persistent index.
-
----
-
-## Anchor Highlight
-
-When a comment thread is active or hovered, its anchor text range receives a highlight.
+- always visible while a thread is attached
+- visible whether annotation cards are shown or hidden
+- clicking a dot reveals or focuses the related thread
+- hovering a dot can preview the corresponding highlight
 
 ### Appearance
 
-- **Muted colored underline** beneath the anchor text range
-- Color: `var(--themeColor30)` (MarkText's green at 30% opacity — very subtle)
-- Underline thickness: **1.5px**
-- Underline offset: **2px** below the text baseline
-- No background highlight. No bold. No border. Just the underline.
+Approved direction:
 
-### Multiple Active Highlights
+- quiet amber dot
+- **no glow / halo / light effect**
+- small and calm, more editorial annotation marker than app chrome
 
-When multiple threads are visible in the margin, each active thread's underline is visible simultaneously. All use the same muted underline color — no per-thread color coding in V1.
+The dot should be readable but understated. It should not feel like an alert badge.
 
-### Multi-Paragraph Anchors
+### Positioning
 
-Selections can span multiple paragraphs. The anchor stores `startParagraphId` + `startOffset` and `endParagraphId` + `endOffset`. The underline spans across paragraphs. The dot indicator appears next to the first paragraph.
+Dots should align to the commented passage region in a way that feels stable and intentional.
 
-### Detached Anchor
+For multi-paragraph anchors:
 
-When a thread's anchor text can no longer be found (fuzzy reattachment failed with <60% similarity):
-- Underline becomes **dashed** instead of solid
-- Color shifts to `var(--editorColor20)` (gray, not green)
-- The comment card shows a subtle "detached" indicator (see Thread States)
+- the dot belongs to the thread's starting location
+- nearby overlapping threads may stack or cluster, but should remain legible
 
----
+## Underline And Anchor Highlight
 
-## Comment Card Anatomy
+Underline/highlight is the active connection between card and text. It is **not** always on.
 
-Each comment card in the margin represents one thread. The card contains all messages in that thread.
+### Visibility Rules
 
-### Card Container
+Show the highlight when:
 
-- Width: fills the margin column (~280px, with 8px padding on each side = 264px content width)
-- Background: `var(--editorBgColor)` (same as editor — no surface separation)
-- Border: `1px solid var(--editorColor10)` (barely visible)
-- Border radius: **4px**
-- Padding: **12px**
-- Margin between cards: **8px**
-- No shadow. Cards should feel printed on the page, not floating above it.
+- hovering the card
+- hovering the dot
+- the thread is active/selected
+- composing a new thread
 
-### Message Anatomy
+Hide the highlight when the thread is inactive.
 
-Each message within a thread:
+### Appearance
 
-```
-┌─────────────────────────────────────┐
-│  Author · timestamp                 │
-│  Message body text goes here and    │
-│  wraps naturally within the card.   │
-└─────────────────────────────────────┘
-```
+Approved direction:
 
-- **Author**: "You" or "AI" — plain text, `font-size: 12px`, `font-weight: 600`, color `var(--editorColor60)`
-- **Timestamp**: relative time ("2m ago", "1h ago"), `font-size: 11px`, color `var(--editorColor30)`, separated from author by a middle dot `·`
-- **Body**: `font-size: 13px`, `line-height: 1.5`, color `var(--editorColor80)`. Same font family as the editor.
-- **AI messages**: identical layout to user messages. No avatar, no special background, no icon. Distinguished only by the "AI" author label. The AI should feel like a peer reader, not a product feature.
+- soft editorial amber treatment
+- subtle underline/highlight, not a harsh selection clone
+- no bright neon color
+- no heavy block background
 
-### Message Spacing
+The highlight should feel like thoughtful annotation, not debugging output.
 
-- Between messages within a thread: **8px** vertical gap
-- Between author line and body: **2px**
-- No dividers between messages — whitespace is the separator
+### Attachment Accuracy
 
-### Delete Affordance
+The highlight should match the actual commented sentence/range as closely as the stored anchor allows.
 
-There is one action per thread: **delete**.
+For multi-paragraph comments:
 
-- **Thread-level delete**: On hover over the card container, a small `×` appears in the top-right corner of the card. Click to remove the entire thread.
-- **Message-level delete**: On hover over an individual message, a small `×` appears in the top-right corner of that message. Click to remove that message from the thread display. If the thread has only one message remaining after deletion, the entire thread is removed.
-- Delete icon: `12px`, color `var(--editorColor30)`, hover color `var(--deleteColor)` (`#ff6969`)
-- Deletion is a **display-layer operation** — removes from `comments.json` only. The AI conversation history in `document.json` is unaffected. The writer can clean up visual clutter without worrying about AI context coherence.
-- No confirmation dialog. Deleting a comment is low-stakes (the markdown is untouched, the AI still remembers the conversation).
-- A brief toast notification appears at the bottom: "Comment deleted. Cmd+Z to undo" — fades after 3 seconds. Uses MarkText's existing notification system.
+- start paragraph highlights from the start offset
+- middle paragraphs show covered range cleanly
+- end paragraph highlights to the end offset
 
----
+Even when the system falls back to paragraph-level placement, the visual result should still feel coherent and not sloppy.
 
-## Thread Compression
+## Card-To-Text Relationship
 
-When a thread has many messages (4+), compress the middle to save vertical space.
+Each comment card, dot, and text highlight must clearly belong to the same thread.
 
-### Behavior
+Requirements:
 
-Following the Notion pattern:
+- hovering a card immediately reveals the related text highlight
+- clicking a card makes that relationship persistent until focus changes
+- card position should sit beside the attached paragraph region, not drift into an unrelated zone
 
-- **Always show**: the first message (original comment) and the last message (most recent reply)
-- **Collapse middle**: replace middle messages with a "Show N replies" link
-- **Threshold**: compress when thread has **4 or more messages**
+This relationship is more important than raw recency ordering. Cards are anchored to text, not sorted as a generic discussion list.
 
-### Visual
+## Overlap And Crowding
 
-```
-┌─────────────────────────────────────┐
-│  You · 10m ago                      │
-│  Is this claim supported?           │
-│                                     │
-│  Show 3 replies                     │
-│                                     │
-│  AI · 1m ago                        │
-│  The evidence in paragraph 4 is     │
-│  indirect — consider citing the     │
-│  source directly.                   │
-└─────────────────────────────────────┘
-```
+There is already a crowding strategy in the current implementation. This spec keeps that direction and clarifies the intended behavior in the integrated margin.
 
-- "Show N replies" link: `font-size: 12px`, color `var(--themeColor)`, no underline. Hover: underline appears.
-- Click: middle messages expand inline. The link changes to "Collapse replies" after expansion.
-- Expand/collapse is instant (no animation) — it's a fold, not a transition.
+### Default Position
 
----
+Each card gets a natural position based on its anchor location.
 
-## Crowding & Overlap Solution
+### Push-Down Behavior
 
-When many comments anchor to nearby paragraphs, cards can compete for vertical space.
+When a new card would overlap an existing card:
 
-### Push-Down Stacking
+- the upper card keeps its position
+- the lower card moves down to clear the overlap
+- this cascades if necessary
 
-Comment cards are positioned to align with their anchor paragraph. When two cards would overlap:
+This movement should feel like cards making room for one another in the page margin, not like items inside a separate scrolling list.
 
-1. The **higher** card keeps its natural position (aligned with its anchor paragraph)
-2. The **lower** card is pushed down until it clears the card above by the standard 8px gap
-3. This cascades: a pushed card can push the card below it further down
+### Compression
 
-### Auto-Compression for Crowded Regions
+Compression happens only when a region becomes crowded enough that full cards would become unreadable or push too far away from their anchors.
 
-When push-down causes cards to extend significantly beyond their anchor positions, apply automatic thread compression:
+Default rule:
 
-- All threads in the crowded region compress to their first-message-only view (even if they have <4 messages)
-- The "Show N replies" link appears for any thread with 2+ messages
-- This reduces card height and resolves most overlap situations
-- The user can still expand individual threads, which may cause temporary overlap (acceptable for an intentional user action)
+- keep cards full when space allows
+- compress only overlapping/crowded regions
 
-### No Connector Lines
+### Existing Threads
 
-Displaced cards do not show connector lines back to their anchor. The spatial proximity is sufficient. When the user hovers over a displaced card, the anchor text underline appears, which is enough to establish the link.
+Outside crowded regions, existing threads remain full visible cards.
 
-### Ordering
+## Thread Actions
 
-Cards are ordered top-to-bottom by their anchor position in the document, not by creation time.
+V1 actions remain intentionally narrow:
 
----
+- reply
+- thread delete
 
-## Interaction Flow
+Out of scope:
 
-### Creating a Margin Comment
+- message-level delete
+- undo stack for comment deletion
+- manual re-attach flow
+- suggestion/rewrite UI inside the thread
 
-1. **Select text**: User selects a sentence, phrase, or paragraph(s) in the editor.
-2. **Invoke comment**: The comment icon appears at the end of Muya's existing FormatPicker toolbar (the selection toolbar that shows bold, italic, link, etc.). One icon added, not a new popup. If comments are currently hidden, clicking this icon also shows the comment margin.
-3. **Compose**: A new empty comment card appears in the margin, aligned with the selection. The card contains a text input field with placeholder text: "Ask about this passage..." The anchor text receives the muted underline highlight.
-4. **Submit**: User presses `Cmd+Enter` or clicks a subtle send affordance to submit. The card transitions from input to message display.
-5. **AI responds**: The AI's response streams into the thread as a new message below the user's comment. A subtle loading indicator (three small animated dots, `var(--editorColor30)`) shows while waiting.
+Thread deletion is UI-layer only and should not mutate AI memory/context.
 
-### Comment Icon in FormatPicker
+## Responsive Boundaries
 
-Instead of adding a new floating button, add a single comment/annotation icon at the end of Muya's existing selection toolbar (FormatPicker). This avoids multiple popups competing on selection and is more discoverable since the user's eyes already go to the FormatPicker.
+This phase is optimized for normal desktop and laptop widths.
 
-- Icon: small margin-annotation glyph, same as the show/hide comments button
-- Positioned as the last item in the FormatPicker toolbar, separated by a subtle divider `|`
-- Same size and style as existing FormatPicker icons
+Requirements:
 
-### Replying in a Thread
+- preserve readable document width
+- preserve readable margin-card width
+- avoid turning the margin into a second panel on wider screens
 
-1. User clicks into an existing thread card
-2. A reply input appears at the bottom of the card, below the last message
-3. Same input field style as initial composition: placeholder "Reply..."
-4. Submit with `Cmd+Enter`
-5. AI response streams in below the user's reply
+Deferred:
 
-### Reply Input
+- special small-window popover behavior
+- narrow-screen mobile-style fallbacks
 
-- Appears only when the thread is focused (user clicks the card or the dot)
-- `font-size: 13px`, matching message body
-- Single-line by default, grows to max 3 lines as the user types
-- Background: `var(--editorColor04)` (barely tinted)
-- Border: none (the background tint is the boundary)
-- Border radius: **3px**
-- Padding: **6px 8px**
+## Explicitly Out Of Scope
 
----
+This spec does **not** cover:
 
-## Generation from Comments
+- suggestion cards
+- rewrite/editing surfaces
+- compose blocks
+- AI generation output beyond the comment thread itself
+- soft-locking anchor text while AI streams
+- separate comment-pane architecture
 
-Comment threads can serve as the starting point for writing tasks. When a discussion in the margin leads the writer to want new or rewritten content, the flow is:
+## Acceptance Criteria
 
-1. The writer discusses a passage with AI in the comment thread (possibly multiple rounds)
-2. At some point, the writer asks the AI to produce content: "rewrite this section," "elaborate on this point," "synthesize this with the notes in research.md"
-3. The AI's response in the thread includes the generated content as a suggestion (same `propose_suggestion` tool, same accept/dismiss behavior as elsewhere in the system)
-4. If the writer accepts, the text is applied to the document at the anchor location
+The implementation is correct when all of these are true:
 
-For larger generation tasks that go beyond a single passage replacement (e.g., "write a new conclusion based on everything we discussed"), the AI produces a **compose block** in the document:
-
-- The compose block appears inline in the document at the relevant location
-- It contains the generated text as a suggestion with Accept / Dismiss / Retry affordances
-- The compose block uses the same visual language as comment cards (same border, same typography) but lives inline in the document body
-- Accept → text becomes part of the document. Dismiss → compose block disappears. Retry → AI regenerates.
-- The compose block is a final output surface, not a conversational surface. The discussion stays in the comment thread.
-
-This keeps the principle: conversation in the margins, output in the document.
-
----
-
-## AI Streaming State
-
-When the AI is responding:
-
-### In the Comment Card
-
-- A new message block appears with "AI" author label
-- Body area shows three animated dots (a gentle pulse, not a spinner): `· · ·`
-- As text streams in, it replaces the dots progressively
-- The streaming text appears with a subtle fade-in per word/chunk (not per character — that's too slow)
-
-### On the Anchor Text
-
-- The anchor underline pulses softly: opacity oscillates between `var(--themeColor20)` and `var(--themeColor40)` on a 2-second cycle
-- This indicates "the AI is thinking about this passage"
-- The pulse stops when streaming completes, and the underline returns to its steady `var(--themeColor30)`
-
-### Interaction During Streaming
-
-- The user can continue editing OTHER parts of the document normally
-- The anchor text range is **soft-locked**: edits to text within the anchor range are queued and applied after the AI response completes
-- No modal blocking. No disabled states on the editor. Just the specific range is held.
-
-### Error States
-
-- **Network error before response**: dots stop, message appears: "Couldn't reach AI. Retry" in `var(--editorColor40)`. "Retry" is a text-link in `var(--themeColor)` that re-submits the same message.
-- **Partial stream error**: show whatever text arrived + "Response interrupted. Retry" below it.
-- **AI unavailable (no API key / offline)**: when the user tries to submit a comment, show inline notice in the reply input area: "AI unavailable — check connection or add API key in Settings." Existing threads and their content remain visible and readable.
-
----
-
-## Empty State
-
-When comments are visible but the document has no comment threads yet, the margin column shows a single placeholder message:
-
-```
-┌─────────────────────────────────────┐
-│  Select text and use the comment    │
-│  icon to start a conversation       │
-│  about your writing.                │
-└─────────────────────────────────────┘
-```
-
-- Same card styling as a regular comment card
-- Text in `var(--editorColor30)`, `font-size: 13px`
-- Vertically centered in the visible margin area
-- Disappears as soon as the first thread is created
-
----
-
-## Thread States
-
-### Open (default)
-
-Normal interactive state. All messages visible (subject to thread compression). Reply input available on focus.
-
-### Detached
-
-When the anchor text has been edited beyond recognition (fuzzy reattachment failed with <60% similarity):
-- The dot indicator changes from a circle to a small **dash** (`—`)
-- The card shows a subtle top-bar indicator: `1px solid var(--editorColor20)` dashed top border
-- A small muted label appears at the top of the card: "Detached" in `font-size: 11px`, `var(--editorColor30)`
-- No underline on any text (anchor is lost)
-- The card positions itself based on its last known anchor paragraph. If that paragraph no longer exists, the card floats to the bottom of the margin column.
-- The user can manually re-anchor by selecting new text and choosing "Re-attach comment" from the context menu, or delete the thread
-
----
-
-## Dark Mode
-
-All values reference CSS variables from MarkText's theming system, so dark mode (one-dark, material-dark, graphite) works automatically:
-
-- `var(--editorBgColor)` → dark surface
-- `var(--editorColor*)` → light text at various opacities
-- `var(--themeColor*)` → theme accent at various opacities
-- `var(--floatBorderColor)` → appropriate dark border
-
-No additional dark-mode-specific tokens needed for V1.
-
----
-
-## Design Tokens
-
-Flowrite-specific tokens for the comment system. These should be reusable across margin comments and global comments.
-
-```
---flowrite-dot-size: 6px
---flowrite-dot-size-hover: 8px
---flowrite-dot-hit-area: 24px
---flowrite-dot-color: var(--editorColor30)
---flowrite-dot-color-hover: var(--editorColor50)
-
---flowrite-anchor-underline-color: var(--themeColor30)
---flowrite-anchor-underline-width: 1.5px
---flowrite-anchor-underline-offset: 2px
---flowrite-anchor-pulse-lo: var(--themeColor20)
---flowrite-anchor-pulse-hi: var(--themeColor40)
---flowrite-anchor-pulse-duration: 2s
-
---flowrite-card-bg: var(--editorBgColor)
---flowrite-card-border: 1px solid var(--editorColor10)
---flowrite-card-radius: 4px
---flowrite-card-padding: 12px
---flowrite-card-gap: 8px
-
---flowrite-meta-size: 12px
---flowrite-meta-color: var(--editorColor60)
---flowrite-timestamp-size: 11px
---flowrite-timestamp-color: var(--editorColor30)
---flowrite-body-size: 13px
---flowrite-body-color: var(--editorColor80)
-```
-
----
-
-## Keyboard Shortcuts
-
-| Action | Shortcut |
-|--------|----------|
-| Show/hide comments | `Cmd+Shift+M` |
-| Comment on selection | `Cmd+Shift+C` (with text selected) |
-| Submit comment / reply | `Cmd+Enter` (in comment input) |
-| Cancel composition | `Escape` (in comment input) |
-
----
-
-## Accessibility
-
-- Dot indicators: `aria-label="Comment on: [first 20 chars of anchor quote]"`. Hit area is 24px despite 6px visual size.
-- AI streaming: an `aria-live="polite"` region announces "AI is responding" when streaming starts and "AI response complete" when it finishes.
-- Comment cards are focusable and announced by screen readers with thread context.
-- The pulsing underline conveys state only through animation. The `aria-live` region provides the equivalent information for non-visual users.
-
----
-
-## Responsive Behavior
-
-### Narrow Windows
-
-When the window width is less than **900px** and comments are visible:
-
-- The margin column width reduces to **240px**
-- Below **750px**: margin comments switch to a **popover mode** — cards appear as popovers anchored to the dot indicator rather than living in a persistent column. Only one popover visible at a time. This prevents the editor from becoming too narrow to write comfortably.
-- Popover cards have the same anatomy as margin cards. Clicking a different dot closes the current popover and opens the new one. Reply input works the same way.
-
-### Wide Windows
-
-When the window width exceeds **1200px**:
-- The margin column remains **280px** (does not grow)
-- Extra space is distributed as padding around the editor area
-
----
-
-## What This Spec Does Not Cover
-
-- Global comments (separate spec — they live below the editor, not in the margin)
-- Suggestion card detailed design (covered by suggestion system spec)
-- Version history UI
-- Authorship provenance traces
-- Writer memory UI
-- API key onboarding flow
-- Multi-document context
-
----
-
-## Data Layer Reference
-
-### Display layer: `comments.json`
-
-Deletion operates here. This is what the UI renders.
-
-```json
-{
-  "schemaVersion": 1,
-  "threads": [
-    {
-      "id": "thr_abc",
-      "scope": "margin",
-      "status": "open",
-      "anchor": {
-        "startParagraphId": "ag-42",
-        "startOffset": 18,
-        "endParagraphId": "ag-42",
-        "endOffset": 61,
-        "quote": "the original selected text"
-      },
-      "messages": [
-        {
-          "id": "msg_001",
-          "author": "user",
-          "body": "Is this claim supported?",
-          "createdAt": "2026-04-10T14:30:00Z"
-        },
-        {
-          "id": "msg_002",
-          "author": "ai",
-          "body": "The evidence is indirect — consider citing the source.",
-          "createdAt": "2026-04-10T14:30:03Z"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### AI context layer: `document.json`
-
-Separate lifecycle. Not affected by UI deletion. Managed by compaction and trimming.
-
-```json
-{
-  "schemaVersion": 1,
-  "conversationHistory": [ /* full message array for Claude API */ ]
-}
-```
-
-### Deletion model
-
-- **Delete a message**: remove from `comments.json` thread messages array. If thread has 0 messages remaining, remove the thread.
-- **Delete a thread**: remove from `comments.json` threads array. Remove anchor underline and dot indicator.
-- Neither operation touches `document.json`. The AI conversation history is a separate concern with its own lifecycle.
-- Undo: standard Cmd+Z within the session. Deletion is added to the UI undo stack. Toast notification: "Comment deleted. Cmd+Z to undo" (fades after 3 seconds).
+- `Ask Flowrite` appears for any non-empty selection.
+- Selecting text and clicking `Ask Flowrite` creates a margin-attached card in immediate input mode.
+- Existing threads appear as visible cards in the document margin, not in a separately scrolling pane.
+- Dots remain visible even when cards are hidden.
+- Underline/highlight appears only on interaction.
+- Dot, highlight, and card clearly map to the same passage.
+- Cards sit beside their attached paragraph region and push down only when overlap requires it.
+- Compression occurs only in crowded regions.
+- The UI feels like page annotation, not a side discussion app.
