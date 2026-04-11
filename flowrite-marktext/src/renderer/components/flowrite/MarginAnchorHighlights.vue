@@ -8,9 +8,13 @@
       v-for="segment in visibleSegments"
       :key="segment.key"
       class="flowrite-margin-highlight"
-      :class="{ 'is-detached': segment.detached }"
+      :class="{
+        'is-detached': segment.detached,
+        'is-clickable': segment.clickable
+      }"
       :style="segment.style"
       data-testid="flowrite-margin-highlight"
+      @click="activateThread(segment.threadId)"
     ></div>
   </div>
 </template>
@@ -268,6 +272,8 @@ export default {
 
           segments.push({
             key: `${thread.id}:${rangeEntry.paragraphId}:${index}:${rectIndex}`,
+            threadId: thread.id,
+            clickable: this.marginThreads.some(candidate => candidate && candidate.id === thread.id),
             detached: resolution.status === ANCHOR_DETACHED,
             style: {
               left: `${Math.max(0, rect.left - editorRect.left)}px`,
@@ -348,6 +354,14 @@ export default {
       }
       this.scrollContainer = null
       this.scrollListener = null
+    },
+
+    activateThread (threadId) {
+      if (!threadId) {
+        return
+      }
+
+      this.$store.dispatch('ACTIVATE_MARGIN_THREAD', threadId)
     }
   }
 }
@@ -366,6 +380,11 @@ export default {
     border-radius: 999px;
     background: linear-gradient(to top, rgba(210, 153, 51, 0.18) 0, rgba(210, 153, 51, 0.18) 42%, transparent 42%);
     border-bottom: 2px solid rgba(210, 153, 51, 0.72);
+  }
+
+  .flowrite-margin-highlight.is-clickable {
+    pointer-events: auto;
+    cursor: pointer;
   }
 
   .flowrite-margin-highlight.is-detached {

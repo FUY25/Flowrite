@@ -291,6 +291,7 @@ export default {
           return {
             ...resolvedThread,
             order,
+            active: this.activeMarginThreadId === resolvedThread.id,
             naturalTop: position.top,
             messageCount: Array.isArray(resolvedThread.comments) ? resolvedThread.comments.length : 0,
             height: this.threadHeights[thread.id] || this.estimateThreadHeight(resolvedThread),

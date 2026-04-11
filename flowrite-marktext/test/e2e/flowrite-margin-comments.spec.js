@@ -273,6 +273,141 @@ test.describe('Flowrite margin comments', () => {
     }
   })
 
+  test('focuses a highlighted passage without jumping the viewport', async () => {
+    test.setTimeout(60000)
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-focus-'))
+    const userDataDir = path.join(tempRoot, 'user-data')
+    const articlePath = path.join(tempRoot, 'draft.md')
+    const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
+    const filler = Array.from({ length: 18 }, (_, index) => `A setup paragraph ${index + 1} that keeps the editor tall enough to scroll.`).join('\n\n')
+
+    await fs.writeFile(articlePath, `# Draft\n\n${filler}\n\nA reflective paragraph with a soft cadence.\n\nA later paragraph that lands with a sharper note.\n`, 'utf8')
+    await fs.writeFile(clientModulePath, `
+      module.exports.createAnthropicClient = function createAnthropicClient () {
+        return {
+          client: {
+            messages: {
+              create: async function create () {
+                return {
+                  id: 'msg_margin_text_only',
+                  role: 'assistant',
+                  stop_reason: 'end_turn',
+                  content: [{
+                    type: 'text',
+                    text: 'No margin reply.'
+                  }]
+                }
+              }
+            }
+          },
+          model: 'flowrite-test-model'
+        }
+      }
+    `, 'utf8')
+
+    let app = null
+    let page = null
+
+    try {
+      const launched = await launchElectron([articlePath], {
+        userDataDir,
+        env: {
+          AI_GATEWAY_API_KEY: 'flowrite-test-key',
+          FLOWRITE_TEST_CLIENT_MODULE: clientModulePath
+        }
+      })
+      app = launched.app
+      page = launched.page
+
+      await waitForRendererIdle(page)
+      await page.waitForFunction(() => {
+        return Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+          .some(node => (node.textContent || '').includes('reflective paragraph with a soft cadence'))
+      })
+
+      await page.evaluate(() => {
+        const editor = document.querySelector('.editor-component')
+        if (editor) {
+          editor.scrollTop = editor.scrollHeight
+        }
+      })
+      await page.waitForTimeout(200)
+
+      await selectTextInEditor(page, 'reflective paragraph')
+      await page.getByRole('button', { name: 'Ask Flowrite' }).click()
+      await expect(page.locator('[data-testid="flowrite-margin-thread-composer"]')).toBeVisible()
+
+      await setComposerDraft(page, 'Keep track of this thought.')
+      await page.locator('[data-testid="flowrite-margin-thread-submit"]').last().click({ force: true })
+
+      await page.waitForFunction(() => {
+        const editorRoot = document.querySelector('.editor-wrapper')
+        const store = editorRoot && editorRoot.__vue__ && editorRoot.__vue__.$store
+        const comments = store && store.state && store.state.flowrite
+          ? store.state.flowrite.comments
+          : []
+        return Array.isArray(comments) && comments.some(thread => {
+          return thread &&
+            thread.scope === 'margin' &&
+            thread.anchor &&
+            thread.anchor.quote === 'reflective paragraph' &&
+            Array.isArray(thread.comments) &&
+            thread.comments.some(comment => comment && comment.author === 'user' && comment.body === 'Keep track of this thought.')
+        })
+      })
+
+      const threadId = await page.evaluate(() => {
+        const editorRoot = document.querySelector('.editor-wrapper')
+        const store = editorRoot && editorRoot.__vue__ && editorRoot.__vue__.$store
+        const thread = store && store.state && store.state.flowrite && Array.isArray(store.state.flowrite.comments)
+          ? store.state.flowrite.comments.find(candidate => candidate && candidate.scope === 'margin' && candidate.anchor && candidate.anchor.quote === 'reflective paragraph')
+          : null
+
+        return thread ? thread.id : null
+      })
+
+      expect(threadId).not.toBeNull()
+      await page.locator('[data-testid="flowrite-margin-thread"]').first().click()
+      await page.waitForFunction(() => document.querySelectorAll('[data-testid="flowrite-margin-highlight"]').length > 0)
+
+      const scrollBefore = await page.evaluate(() => {
+        const editor = document.querySelector('.editor-component')
+        return editor ? editor.scrollTop : 0
+      })
+
+      await page.evaluate(() => {
+        const highlight = document.querySelector('[data-testid="flowrite-margin-highlight"]')
+        if (!highlight) {
+          throw new Error('Unable to find a visible Flowrite margin highlight.')
+        }
+
+        highlight.dispatchEvent(new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true
+        }))
+      })
+      await page.waitForTimeout(200)
+
+      const result = await page.evaluate(() => {
+        const editorRoot = document.querySelector('.editor-wrapper')
+        const store = editorRoot && editorRoot.__vue__ && editorRoot.__vue__.$store
+        const editor = document.querySelector('.editor-component')
+        return {
+          activeMarginThreadId: store && store.state && store.state.flowrite ? store.state.flowrite.activeMarginThreadId : null,
+          scrollTop: editor ? editor.scrollTop : 0
+        }
+      })
+
+      expect(result.activeMarginThreadId).toBe(threadId)
+      expect(Math.abs(result.scrollTop - scrollBefore)).toBeLessThanOrEqual(4)
+    } finally {
+      try {
+        await closeElectron(app)
+      } catch (error) {}
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   test('opens the Ask Flowrite composer from a selection and posts a margin comment in the rail', async () => {
     test.setTimeout(60000)
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-'))

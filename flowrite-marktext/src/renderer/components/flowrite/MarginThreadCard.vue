@@ -287,6 +287,7 @@ export default {
     left: 0;
     right: 0;
     z-index: 1;
+    transition: top 160ms ease;
   }
 
   .flowrite-margin-thread-card__surface {
