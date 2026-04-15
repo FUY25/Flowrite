@@ -43,7 +43,6 @@ flowrite-marktext/
 │   │   ├── components/flowrite/     # All Flowrite Vue components
 │   │   │   ├── Toolbar.vue                  # Top bar: sidebar toggle, annotations toggle, Have a Look
 │   │   │   ├── HaveALookPopover.vue         # Persona selector + optional prompt textarea
-│   │   │   ├── AiReviewButton.vue           # Standalone "Have a Look" trigger button
 │   │   │   ├── GlobalComments.vue           # Bottom discussion panel (global thread)
 │   │   │   ├── MarginCommentLayer.vue       # Absolute-positioned margin thread rail
 │   │   │   ├── MarginThreadCard.vue         # Single margin thread card (read + reply)
@@ -88,7 +87,7 @@ flowrite-marktext/
 
 **`src/renderer/components/flowrite/`:**
 - Purpose: All Flowrite Vue UI components
-- Contains: 10 Vue single-file components + 1 JS layout utility
+- Contains: 9 Vue single-file components + 1 JS layout utility
 - Key files: `flowrite-marktext/src/renderer/components/flowrite/MarginCommentLayer.vue`, `flowrite-marktext/src/renderer/components/flowrite/GlobalComments.vue`
 
 **`src/renderer/store/modules/flowrite.js`:**
