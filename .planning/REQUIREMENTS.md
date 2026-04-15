@@ -9,11 +9,11 @@ Requirements for making Have a Look work reliably end-to-end.
 
 ### AI Backend
 
-- [ ] **AI-01**: AI Review job uses `max_tokens` ≥ 4096 (currently 1024 causes truncation of multi-comment responses)
-- [ ] **AI-02**: AI Review produces both global comments AND margin comments in a single pass using `create_comment` tool
-- [ ] **AI-03**: AI Review respects persona selection (Friendly, Critical, Improvement) — collaboration routing delivers persona-appropriate system prompt
-- [ ] **AI-04**: AI Review conversation entries are appended to the single-session history (DD-001 compliance)
-- [ ] **AI-05**: Truncated or malformed tool_use responses are handled gracefully — partial results displayed + error toast shown to user
+- [x] **AI-01**: AI Review job uses `max_tokens` ≥ 4096 (currently 1024 causes truncation of multi-comment responses)
+- [x] **AI-02**: AI Review produces both global comments AND margin comments in a single pass using `create_comment` tool
+- [x] **AI-03**: AI Review respects persona selection (Friendly, Critical, Improvement) — collaboration routing delivers persona-appropriate system prompt
+- [x] **AI-04**: AI Review conversation entries are appended to the single-session history (DD-001 compliance)
+- [x] **AI-05**: Truncated or malformed tool_use responses are handled gracefully — partial results displayed + error toast shown to user
 
 ### UI & Progress
 
@@ -65,11 +65,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AI-01 | Phase 1 | Pending |
-| AI-02 | Phase 1 | Pending |
-| AI-03 | Phase 1 | Pending |
-| AI-04 | Phase 1 | Pending |
-| AI-05 | Phase 1 | Pending |
+| AI-01 | Phase 1 | Completed |
+| AI-02 | Phase 1 | Completed |
+| AI-03 | Phase 1 | Completed |
+| AI-04 | Phase 1 | Completed |
+| AI-05 | Phase 1 | Completed |
 | UI-01 | Phase 2 | Pending |
 | UI-02 | Phase 2 | Pending |
 | UI-03 | Phase 2 | Pending |
@@ -85,4 +85,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-04-15*
-*Last updated: 2026-04-15 after roadmap creation*
+*Last updated: 2026-04-15 after Phase 1 execution*

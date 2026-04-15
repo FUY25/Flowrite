@@ -12,7 +12,7 @@ The AI pipeline for Have a Look is wired end-to-end but breaks under real usage:
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: AI Backend Reliability** - Fix token limits, error handling, persona routing, and session history so AI Review produces complete multi-comment responses
+- [x] **Phase 1: AI Backend Reliability** - Fix token limits, error handling, persona routing, and session history so AI Review produces complete multi-comment responses
 - [ ] **Phase 2: UI Feedback & Safety** - Surface review progress, display comments correctly, and protect in-flight text ranges from editing
 - [ ] **Phase 3: Cleanup & Verification** - Remove dead code and verify all three personas produce distinct, appropriate review styles
 
@@ -27,11 +27,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. User triggers Have a Look with each persona (Friendly, Critical, Improvement) and the system prompt delivered to the API differs per selection
   3. After an AI Review completes, the review conversation entries appear in the document's conversation history and persist across app restart
   4. When the API returns a truncated or malformed tool_use response, the user sees an error toast and any partial comments that were created before the failure are still visible
-**Plans**: TBD
+**Plans**: 2 planned
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [x] 01-01: Harden AI Review request construction and prompt policy
+- [x] 01-02: Add recoverable AI Review failure handling
 
 ### Phase 2: UI Feedback & Safety
 **Goal**: Users see live progress during AI Review and results render correctly as sidebar margin cards and global discussion entries, with editing disabled on in-flight text ranges
@@ -69,7 +69,7 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. AI Backend Reliability | 0/2 | Not started | - |
+| 1. AI Backend Reliability | 2/2 | Completed | 2026-04-15 |
 | 2. UI Feedback & Safety | 0/2 | Not started | - |
 | 3. Cleanup & Verification | 0/1 | Not started | - |
 
