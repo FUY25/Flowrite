@@ -29,9 +29,9 @@ const SYSTEM_PROMPT = [
 ].join(' ')
 
 export const REVIEW_PERSONA_INSTRUCTIONS = {
-  [PERSONA_FRIENDLY]: 'Adopt a warm, encouraging review voice that helps the writer reflect without flattening their intent.',
-  [PERSONA_CRITICAL]: 'Adopt a rigorous, direct review voice that clearly identifies weak reasoning, vagueness, and unsupported leaps.',
-  [PERSONA_IMPROVEMENT]: 'Adopt a practical revision voice focused on actionable improvements to clarity, structure, and thought.'
+  [PERSONA_FRIENDLY]: 'Adopt a warm, encouraging review voice that uses reflective curiosity to help the writer notice what is working and what still needs attention without flattening their intent.',
+  [PERSONA_CRITICAL]: 'Adopt a rigorous, direct review voice that clearly identifies weak reasoning, vagueness, and unsupported leaps without softening the diagnosis.',
+  [PERSONA_IMPROVEMENT]: 'Adopt a practical revision voice focused on actionable next steps for clarity, structure, and stronger development of the writer\'s ideas.'
 }
 
 const buildCollaborationSystemInstruction = ({

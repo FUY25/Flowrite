@@ -5,42 +5,141 @@ import { expect } from 'chai'
 import { createAnthropicClient } from '../../src/main/flowrite/ai/anthropicClient.js'
 import { buildRuntimeRequest } from '../../src/main/flowrite/ai/promptBuilder.js'
 
-const describeIfEnabled = process.env.AI_GATEWAY_API_KEY ? describe : describe.skip
+const PERSONA_FIXTURE_NAME = 'reflection-draft.md'
+const PERSONA_REVIEW_PROMPT = 'Review this draft with one short comment-first response. Do not rewrite the draft.'
+const PERSONA_GATEWAY_REQUIRED_MESSAGE = 'AI_GATEWAY_API_KEY is required for CLN-02 live persona verification.'
+const PERSONA_VARIANTS = [
+  { key: 'friendly', heading: 'Friendly' },
+  { key: 'critical', heading: 'Critical' },
+  { key: 'improvement', heading: 'Improvement' }
+]
+
+const normalizeWhitespace = value => String(value || '').replace(/\s+/g, ' ').trim()
 
 const collectResponseShape = response => {
   const content = response.content || []
-
-  return {
-    text: content
+  const toolUses = content.filter(block => block && block.type === 'tool_use')
+  const text = normalizeWhitespace(
+    content
       .filter(block => block && block.type === 'text')
       .map(block => block.text)
       .join('\n')
-      .trim(),
-    toolUses: content.filter(block => block && block.type === 'tool_use')
+  )
+  const commentBodies = toolUses
+    .filter(block => block.name === 'create_comment')
+    .map(block => normalizeWhitespace(block.input && block.input.body))
+    .filter(Boolean)
+
+  return {
+    text,
+    toolUses,
+    commentBodies
   }
 }
 
 const expectCommentFirstOutcome = response => {
-  const { text, toolUses } = collectResponseShape(response)
+  const { text, toolUses, commentBodies } = collectResponseShape(response)
   const toolNames = toolUses.map(block => block.name)
+  const sampleOutput = [...commentBodies, text].filter(Boolean).join('\n\n')
+  const normalizedOutput = normalizeWhitespace(sampleOutput)
 
   const hasTextComment = text.length > 0
-  const hasStructuredComment = toolNames.length > 0 && toolNames.every(name => name === 'create_comment')
+  const hasStructuredComment = commentBodies.length > 0 &&
+    toolNames.length > 0 &&
+    toolNames.every(name => name === 'create_comment')
 
   expect(hasTextComment || hasStructuredComment).to.equal(true)
   expect(toolNames).to.not.include('propose_suggestion')
 
   return {
     text,
-    toolNames
+    toolNames,
+    commentBodies,
+    sampleOutput,
+    normalizedOutput
   }
 }
 
-describeIfEnabled('Flowrite smoke evals', function () {
-  this.timeout(30000)
+const buildPersonaEvalReport = ({ fixtureName, runDate, model, personaOutputs }) => {
+  const lines = [
+    '# Phase 3 Persona Eval',
+    '',
+    `- Fixture: \`${fixtureName}\``,
+    `- Run date: \`${runDate}\``,
+    `- Model: \`${model}\``,
+    '',
+    '## Persona Outputs',
+    ''
+  ]
+
+  for (const personaOutput of personaOutputs) {
+    lines.push(`### ${personaOutput.heading}`)
+    lines.push('')
+    lines.push(`- Tool names: ${personaOutput.toolNames.length ? `\`${personaOutput.toolNames.join('`, `')}\`` : 'text response only'}`)
+    lines.push('')
+    lines.push('```text')
+    lines.push(personaOutput.sampleOutput || '(no sample output captured)')
+    lines.push('```')
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+const getPersonaEvalReportPath = () => path.resolve(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  '.planning',
+  'phases',
+  '03-cleanup-verification',
+  '03-persona-eval.md'
+)
+
+const writePersonaEvalReport = async ({ fixtureName, runDate, model, personaOutputs }) => {
+  const reportPath = getPersonaEvalReportPath()
+
+  await fs.mkdir(path.dirname(reportPath), { recursive: true })
+  await fs.writeFile(
+    reportPath,
+    buildPersonaEvalReport({ fixtureName, runDate, model, personaOutputs }),
+    'utf8'
+  )
+
+  return reportPath
+}
+
+const buildPersonaReviewRequest = ({ fixturePath, markdown, model, reviewPersona }) => buildRuntimeRequest({
+  jobType: 'ai_review',
+  documentPath: fixturePath,
+  markdown,
+  prompt: PERSONA_REVIEW_PROMPT,
+  reviewPersona,
+  conversationHistory: [],
+  model,
+  maxTokens: 256
+})
+
+const skipWithoutGatewayApiKey = context => {
+  if (!process.env.AI_GATEWAY_API_KEY) {
+    context.skip()
+  }
+}
+
+const requireGatewayApiKey = () => {
+  if (!process.env.AI_GATEWAY_API_KEY) {
+    throw new Error(PERSONA_GATEWAY_REQUIRED_MESSAGE)
+  }
+}
+
+describe('Flowrite smoke evals', function () {
+  this.timeout(60000)
 
   it('returns comment-first feedback for a reflective draft fixture', async function () {
-    const fixturePath = path.join(__dirname, 'fixtures', 'reflection-draft.md')
+    skipWithoutGatewayApiKey(this)
+
+    const fixturePath = path.join(__dirname, 'fixtures', PERSONA_FIXTURE_NAME)
     const markdown = await fs.readFile(fixturePath, 'utf8')
     const { client, model } = createAnthropicClient()
 
@@ -62,7 +161,9 @@ describeIfEnabled('Flowrite smoke evals', function () {
   })
 
   it('can emit the Flowrite create_comment tool shape through the gateway', async function () {
-    const fixturePath = path.join(__dirname, 'fixtures', 'reflection-draft.md')
+    skipWithoutGatewayApiKey(this)
+
+    const fixturePath = path.join(__dirname, 'fixtures', PERSONA_FIXTURE_NAME)
     const markdown = await fs.readFile(fixturePath, 'utf8')
     const { client, model } = createAnthropicClient()
 
@@ -81,66 +182,40 @@ describeIfEnabled('Flowrite smoke evals', function () {
     expect(toolUse.name).to.equal('create_comment')
   })
 
-  it('sends materially different review persona instructions for friendly, critical, and improvement review modes', async function () {
-    const fixturePath = path.join(__dirname, 'fixtures', 'reflection-draft.md')
+  it('captures materially different friendly, critical, and improvement outputs for the same reflective draft fixture', async function () {
+    requireGatewayApiKey()
+
+    const fixturePath = path.join(__dirname, 'fixtures', PERSONA_FIXTURE_NAME)
     const markdown = await fs.readFile(fixturePath, 'utf8')
     const { client, model } = createAnthropicClient()
+    const personaOutputs = []
 
-    const friendlyRequest = buildRuntimeRequest({
-      jobType: 'ai_review',
-      documentPath: fixturePath,
-      markdown,
-      prompt: 'Review this draft with one short comment-first response.',
-      reviewPersona: 'friendly',
-      conversationHistory: [],
+    for (const persona of PERSONA_VARIANTS) {
+      const response = await client.messages.create(buildPersonaReviewRequest({
+        fixturePath,
+        markdown,
+        model,
+        reviewPersona: persona.key
+      }))
+
+      personaOutputs.push({
+        ...persona,
+        ...expectCommentFirstOutcome(response)
+      })
+    }
+
+    await writePersonaEvalReport({
+      fixtureName: PERSONA_FIXTURE_NAME,
+      runDate: new Date().toISOString(),
       model,
-      maxTokens: 256
+      personaOutputs
     })
 
-    const criticalRequest = buildRuntimeRequest({
-      jobType: 'ai_review',
-      documentPath: fixturePath,
-      markdown,
-      prompt: 'Review this draft with one short comment-first response.',
-      reviewPersona: 'critical',
-      conversationHistory: [],
-      model,
-      maxTokens: 256
-    })
+    const normalizedOutputs = personaOutputs.map(persona => persona.normalizedOutput)
+    expect(new Set(normalizedOutputs).size).to.equal(3)
 
-    const improvementRequest = buildRuntimeRequest({
-      jobType: 'ai_review',
-      documentPath: fixturePath,
-      markdown,
-      prompt: 'Review this draft with one short comment-first response.',
-      reviewPersona: 'improvement',
-      conversationHistory: [],
-      model,
-      maxTokens: 256
-    })
-
-    expect(friendlyRequest.system[1].text).to.not.equal(criticalRequest.system[1].text)
-    expect(criticalRequest.system[1].text).to.not.equal(improvementRequest.system[1].text)
-    expect(friendlyRequest.system[1].text).to.not.equal(improvementRequest.system[1].text)
-
-    const [friendlyResponse, criticalResponse, improvementResponse] = await Promise.all([
-      client.messages.create(friendlyRequest),
-      client.messages.create(criticalRequest),
-      client.messages.create(improvementRequest)
-    ])
-
-    const friendlyOutcome = expectCommentFirstOutcome(friendlyResponse)
-    const criticalOutcome = expectCommentFirstOutcome(criticalResponse)
-    const improvementOutcome = expectCommentFirstOutcome(improvementResponse)
-
-    expect(
-      friendlyOutcome.text.length > 0 || friendlyOutcome.toolNames.length > 0
-    ).to.equal(true)
-    expect(
-      criticalOutcome.text.length > 0 || criticalOutcome.toolNames.length > 0
-    ).to.equal(true)
-    expect(
-      improvementOutcome.text.length > 0 || improvementOutcome.toolNames.length > 0
-    ).to.equal(true)
+    expect(personaOutputs[0].normalizedOutput).to.not.equal(personaOutputs[1].normalizedOutput)
+    expect(personaOutputs[0].normalizedOutput).to.not.equal(personaOutputs[2].normalizedOutput)
+    expect(personaOutputs[1].normalizedOutput).to.not.equal(personaOutputs[2].normalizedOutput)
   })
 })
