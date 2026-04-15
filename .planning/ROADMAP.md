@@ -13,7 +13,7 @@ The AI pipeline for Have a Look is wired end-to-end but breaks under real usage:
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: AI Backend Reliability** - Fix token limits, error handling, persona routing, and session history so AI Review produces complete multi-comment responses
-- [ ] **Phase 2: UI Feedback & Safety** - Surface review progress, display comments correctly, and protect in-flight text ranges from editing
+- [x] **Phase 2: UI Feedback & Safety** - Surface review progress, display comments correctly, and protect in-flight text ranges from editing (completed 2026-04-16)
 - [ ] **Phase 3: Cleanup & Verification** - Remove dead code and verify all three personas produce distinct, appropriate review styles
 
 ## Phase Details
@@ -43,12 +43,12 @@ Plans:
   3. Global comments from AI Review appear in the bottom discussion panel as new entries
   4. While AI Review is in progress, text ranges referenced by the review are visually marked and editing is disabled on those ranges
   5. The Have a Look button is disabled (unclickable) while any AI job is running, preventing double-trigger
-**Plans**: TBD
+**Plans**: 2 planned
 **UI hint**: yes
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [x] 02-01: Harden live AI review feedback and mixed-scope result surfacing
+- [x] 02-02: Lock in-flight review ranges and block edits on referenced text
 
 ### Phase 3: Cleanup & Verification
 **Goal**: Dead code removed and all three personas verified to produce distinct, high-quality review output on real documents
@@ -57,10 +57,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. AiReviewButton.vue is deleted from the codebase and no imports reference it
   2. Running Have a Look with each of the three personas (Friendly, Critical, Improvement) on the same document produces noticeably different comment tones and content
-**Plans**: TBD
+**Plans**: 2 planned
 
 Plans:
-- [ ] 03-01: TBD
+- [x] 03-01: Delete the legacy AiReviewButton path and refresh the surviving toolbar contract
+- [ ] 03-02: Prove persona distinction on a real fixture and capture a human-reviewed eval artifact
 
 ## Progress
 
@@ -70,8 +71,8 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. AI Backend Reliability | 2/2 | Completed | 2026-04-15 |
-| 2. UI Feedback & Safety | 0/2 | Not started | - |
-| 3. Cleanup & Verification | 0/1 | Not started | - |
+| 2. UI Feedback & Safety | 2/2 | Complete    | 2026-04-16 |
+| 3. Cleanup & Verification | 1/2 | In progress | - |
 
 ### Phase 4: Persona Voice Design - Expand the three persona instructions (Friendly, Critical, Improvement) from single sentences to rich behavioral profiles with tone examples, focus areas, and anti-patterns
 
