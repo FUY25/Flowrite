@@ -267,9 +267,10 @@ export class FlowriteController {
 
     const instructions = [
       `Run a document-wide AI review using the "${personaLabel}" persona.`,
-      'Leave 1 to 3 concise comments in the existing global discussion thread.',
+      'Leave comments on the most important issues in the draft.',
       `Use create_comment with scope "global" and threadId "${FLOWRITE_GLOBAL_THREAD_ID}" for whole-draft observations.`,
-      'You may also create passage-level comments when a sentence or paragraph deserves direct attention.',
+      'Reserve the global thread for document-wide themes such as structure, argument, tone, or overall clarity.',
+      'Prefer margin comments when a sentence or paragraph deserves direct attention.',
       'For passage-level comments, use create_comment with scope "margin" and include an anchor object with quote, start, and end details when possible.',
       'Each comment should focus on one distinct issue, question, or spark in the draft.',
       'Do not propose rewrites in this pass unless explicitly asked later.',

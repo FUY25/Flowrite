@@ -24,9 +24,10 @@ describe('Flowrite AI review prompts', function () {
 
       expect(prompt).to.include('"critical" persona')
       expect(prompt).to.include('Specific review request: Look for emotional contradictions.')
-      expect(prompt).to.include('Leave 1 to 3 concise comments')
+      expect(prompt).to.include('Leave comments on the most important issues in the draft.')
       expect(prompt).to.include('Use create_comment with scope "global"')
-      expect(prompt).to.include('You may also create passage-level comments')
+      expect(prompt).to.include('Reserve the global thread for document-wide themes')
+      expect(prompt).to.include('Prefer margin comments when a sentence or paragraph deserves direct attention.')
       expect(prompt).to.include('Do not propose rewrites')
       expect(prompt).to.include('Do not write free-text output as the review result')
     } finally {

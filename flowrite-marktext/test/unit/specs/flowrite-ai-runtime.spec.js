@@ -424,6 +424,39 @@ describe('Flowrite AI runtime', function () {
     expect(suggestionRequest.tools.map(tool => tool.name)).to.deep.equal(['propose_suggestion'])
   })
 
+  it('uses per-job output caps for AI review, thread replies, and suggestion requests', function () {
+    const aiReviewRequest = buildRuntimeRequest({
+      jobType: 'ai_review',
+      documentPath: '/tmp/draft.md',
+      markdown: '# Draft\nParagraph.\n',
+      prompt: 'Review this draft.',
+      conversationHistory: [],
+      model: DEFAULT_FLOWRITE_MODEL
+    })
+
+    const threadReplyRequest = buildRuntimeRequest({
+      jobType: 'thread_reply',
+      documentPath: '/tmp/draft.md',
+      markdown: '# Draft\nParagraph.\n',
+      prompt: 'Comment on this draft.',
+      conversationHistory: [],
+      model: DEFAULT_FLOWRITE_MODEL
+    })
+
+    const suggestionRequest = buildRuntimeRequest({
+      jobType: 'request_suggestion',
+      documentPath: '/tmp/draft.md',
+      markdown: '# Draft\nParagraph.\n',
+      prompt: 'Rewrite this sentence.',
+      conversationHistory: [],
+      model: DEFAULT_FLOWRITE_MODEL
+    })
+
+    expect(aiReviewRequest.max_tokens).to.equal(16384)
+    expect(threadReplyRequest.max_tokens).to.equal(2048)
+    expect(suggestionRequest.max_tokens).to.equal(2048)
+  })
+
   it('adds distinct persona instructions to AI review requests', function () {
     const friendly = buildRuntimeRequest({
       jobType: 'ai_review',
@@ -444,12 +477,77 @@ describe('Flowrite AI runtime', function () {
       conversationHistory: [],
       model: DEFAULT_FLOWRITE_MODEL
     })
+    const improvement = buildRuntimeRequest({
+      jobType: 'ai_review',
+      documentPath: '/tmp/draft.md',
+      markdown: '# Draft\n',
+      prompt: 'Review this draft.',
+      reviewPersona: 'improvement',
+      conversationHistory: [],
+      model: DEFAULT_FLOWRITE_MODEL
+    })
 
     expect(friendly.metadata.reviewPersona).to.equal('friendly')
     expect(critical.metadata.reviewPersona).to.equal('critical')
+    expect(improvement.metadata.reviewPersona).to.equal('improvement')
     expect(friendly.system.map(entry => entry.text)).to.include(REVIEW_PERSONA_INSTRUCTIONS.friendly)
     expect(critical.system.map(entry => entry.text)).to.include(REVIEW_PERSONA_INSTRUCTIONS.critical)
+    expect(improvement.system.map(entry => entry.text)).to.include(REVIEW_PERSONA_INSTRUCTIONS.improvement)
     expect(REVIEW_PERSONA_INSTRUCTIONS.friendly).to.not.equal(REVIEW_PERSONA_INSTRUCTIONS.critical)
+    expect(REVIEW_PERSONA_INSTRUCTIONS.critical).to.not.equal(REVIEW_PERSONA_INSTRUCTIONS.improvement)
+    expect(REVIEW_PERSONA_INSTRUCTIONS.friendly).to.not.equal(REVIEW_PERSONA_INSTRUCTIONS.improvement)
+  })
+
+  it('persists AI review conversation history and the selected persona after a successful review run', async function () {
+    const documentPath = path.join(tempRoot, 'review-history.md')
+    await fs.writeFile(documentPath, '# Draft\nBody\n', 'utf8')
+
+    const clientModulePath = await createStubClientModule('review-history-client', `
+      module.exports.createAnthropicClient = function createAnthropicClient () {
+        return {
+          client: {
+            messages: {
+              create: async function create () {
+                return {
+                  id: 'msg_review_history',
+                  role: 'assistant',
+                  stop_reason: 'end_turn',
+                  content: [{ type: 'text', text: 'Review finished.' }]
+                }
+              }
+            }
+          },
+          model: 'test-model'
+        }
+      }
+    `)
+
+    const manager = new FlowriteRuntimeManager({
+      runtimeConfig: {
+        clientModulePath
+      }
+    })
+
+    try {
+      const result = await manager.runJob({
+        jobType: 'ai_review',
+        documentPath,
+        payload: {
+          markdown: '# Draft\nBody\n',
+          prompt: 'Review this draft.',
+          reviewPersona: 'improvement'
+        }
+      })
+      const documentRecord = await loadDocumentRecord(documentPath)
+
+      expect(result.finalText).to.equal('Review finished.')
+      expect(documentRecord.lastReviewPersona).to.equal('improvement')
+      expect(documentRecord.conversationHistory).to.be.an('array')
+      expect(documentRecord.conversationHistory.length).to.be.above(0)
+      expect(documentRecord.historyTokenEstimate).to.be.a('number').above(0)
+    } finally {
+      await manager.dispose()
+    }
   })
 
   it('maps offline client failures to AI_UNAVAILABLE', async function () {

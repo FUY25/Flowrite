@@ -1,5 +1,8 @@
 import { getFlowriteTools } from './toolRegistry'
 import {
+  JOB_TYPE_AI_REVIEW,
+  JOB_TYPE_THREAD_REPLY,
+  JOB_TYPE_REQUEST_SUGGESTION,
   PERSONA_FRIENDLY,
   PERSONA_CRITICAL,
   PERSONA_IMPROVEMENT,
@@ -10,6 +13,12 @@ import {
 import { resolveNextThreadMode, isActionSeekingMessage } from './collaborationRouting.js'
 
 export const DEFAULT_HISTORY_TOKEN_BUDGET = 80000
+
+const JOB_MAX_TOKEN_DEFAULTS = {
+  [JOB_TYPE_AI_REVIEW]: 16384,
+  [JOB_TYPE_THREAD_REPLY]: 2048,
+  [JOB_TYPE_REQUEST_SUGGESTION]: 2048
+}
 
 const SYSTEM_PROMPT = [
   'You are Flowrite, an AI writing companion for reflective markdown drafting.',
@@ -188,8 +197,11 @@ export const buildRuntimeRequest = ({
   latestUserMessage = '',
   threadId = null,
   model,
-  maxTokens = 1024
+  maxTokens
 }) => {
+  const resolvedMaxTokens = Number.isFinite(maxTokens)
+    ? maxTokens
+    : (JOB_MAX_TOKEN_DEFAULTS[jobType] || 1024)
   const currentTurn = buildCurrentTurnUserMessage({ markdown, prompt })
   const system = [
     {
@@ -223,7 +235,7 @@ export const buildRuntimeRequest = ({
 
   return {
     model,
-    max_tokens: maxTokens,
+    max_tokens: resolvedMaxTokens,
     metadata: {
       jobType,
       documentPath,
