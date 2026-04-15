@@ -2,6 +2,7 @@ import Vue from 'vue'
 import Vuex from 'vuex'
 import { expect } from 'chai'
 import { ipcRenderer } from 'electron'
+import notice from '../../../src/renderer/services/notification'
 import flowriteModule, {
   createDefaultFlowriteState,
   registerFlowriteLifecycle
@@ -72,6 +73,7 @@ describe('Flowrite renderer store', function () {
   const originalInvoke = ipcRenderer.invoke
   const originalOn = ipcRenderer.on
   const originalSend = ipcRenderer.send
+  const originalNotify = notice.notify
   let listeners
 
   beforeEach(function () {
@@ -82,12 +84,16 @@ describe('Flowrite renderer store', function () {
     ipcRenderer.on = (channel, handler) => {
       listeners.set(channel, handler)
     }
+    notice.notify = () => {
+      throw new Error('Unexpected notice.notify call in test.')
+    }
   })
 
   afterEach(function () {
     ipcRenderer.invoke = originalInvoke
     ipcRenderer.on = originalOn
     ipcRenderer.send = originalSend
+    notice.notify = originalNotify
   })
 
   it('bootstraps the current document sidecars and availability into one module', async function () {
@@ -553,6 +559,115 @@ describe('Flowrite renderer store', function () {
 
     expect(store.state.flowrite.runtime.status).to.equal('completed')
     expect(store.state.flowrite.inFlightAnchors).to.deep.equal([])
+  })
+
+  it('stores the last AI review request before invoking the main-process review run', async function () {
+    const store = createStore({
+      currentFile: {
+        pathname: '/notes/draft.md',
+        markdown: '# Draft\n'
+      }
+    })
+
+    const invokeCalls = []
+    ipcRenderer.invoke = async (channel, payload) => {
+      invokeCalls.push({ channel, payload })
+      return { ok: true }
+    }
+
+    await store.dispatch('RUN_AI_REVIEW', {
+      reviewPersona: 'critical',
+      prompt: '  Focus on structure.  '
+    })
+
+    expect(invokeCalls).to.deep.equal([{
+      channel: 'mt::flowrite:run-ai-review',
+      payload: {
+        pathname: '/notes/draft.md',
+        markdown: '# Draft\n',
+        reviewPersona: 'critical',
+        prompt: 'Focus on structure.'
+      }
+    }])
+    expect(store.state.flowrite.lastAiReviewRequest).to.deep.equal({
+      reviewPersona: 'critical',
+      prompt: 'Focus on structure.'
+    })
+  })
+
+  it('shows a retry toast only for AI review failures and retries with the saved payload', async function () {
+    const store = createStore({
+      currentFile: {
+        pathname: '/notes/draft.md',
+        markdown: '# Draft\n'
+      }
+    })
+
+    const invokeCalls = []
+    ipcRenderer.invoke = async (channel, payload) => {
+      invokeCalls.push({ channel, payload })
+      return { ok: true }
+    }
+
+    const notifyCalls = []
+    notice.notify = payload => {
+      notifyCalls.push(payload)
+      return Promise.resolve()
+    }
+
+    await store.dispatch('RUN_AI_REVIEW', {
+      reviewPersona: 'improvement',
+      prompt: '  Focus on transitions.  '
+    })
+
+    await store.dispatch('UPDATE_FLOWRITE_RUNTIME_PROGRESS', {
+      phase: 'bootstrap',
+      status: 'failed',
+      error: {
+        message: 'bootstrap failed'
+      }
+    })
+
+    expect(notifyCalls).to.have.length(0)
+
+    await store.dispatch('UPDATE_FLOWRITE_RUNTIME_PROGRESS', {
+      phase: 'ai_review',
+      status: 'failed',
+      error: {
+        message: 'Gateway timeout'
+      }
+    })
+    await flushPromises()
+
+    expect(notifyCalls).to.have.length(1)
+    expect(notifyCalls[0]).to.deep.include({
+      time: 0,
+      title: 'Flowrite AI Review failed',
+      type: 'error',
+      showConfirm: true
+    })
+    expect(notifyCalls[0].message).to.include('Gateway timeout')
+    expect(notifyCalls[0].message).to.include('Retry the same review?')
+    expect(invokeCalls).to.deep.equal([
+      {
+        channel: 'mt::flowrite:run-ai-review',
+        payload: {
+          pathname: '/notes/draft.md',
+          markdown: '# Draft\n',
+          reviewPersona: 'improvement',
+          prompt: 'Focus on transitions.'
+        }
+      },
+      {
+        channel: 'mt::flowrite:run-ai-review',
+        payload: {
+          pathname: '/notes/draft.md',
+          markdown: '# Draft\n',
+          reviewPersona: 'improvement',
+          prompt: 'Focus on transitions.'
+        }
+      }
+    ])
   })
 
   it('rebootstraps the active document when Flowrite availability changes without a file switch', async function () {

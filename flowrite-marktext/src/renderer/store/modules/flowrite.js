@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import bus from '../../bus'
+import notice from '../../services/notification'
 import { createMarginAnchor } from '../../../flowrite/anchors'
 import {
   TERMINAL_RUNTIME_STATUSES,
@@ -74,6 +75,7 @@ export const createDefaultFlowriteState = () => ({
   composerMarginThreadWasAnnotationsPaneOpen: false,
   inFlightAnchors: [],
   saveCycleId: createSaveCycleId(),
+  lastAiReviewRequest: null,
   availability: normalizeAvailability(),
   runtime: createRuntimeState()
 })
@@ -100,6 +102,7 @@ const mutations = {
     state.composerMarginThreadWasAnnotationsPaneOpen = false
     state.inFlightAnchors = []
     state.saveCycleId = createSaveCycleId()
+    state.lastAiReviewRequest = null
     state.availability = normalizeAvailability(availability)
     state.runtime = createRuntimeState()
   },
@@ -118,6 +121,7 @@ const mutations = {
     state.composerMarginThreadWasAnnotationsPaneOpen = false
     state.inFlightAnchors = []
     state.saveCycleId = createSaveCycleId()
+    state.lastAiReviewRequest = null
     state.availability = availability
     state.runtime = createRuntimeState({
       ready: typeof payload.runtimeReady === 'boolean' ? payload.runtimeReady : Boolean(availability.enabled)
@@ -142,6 +146,12 @@ const mutations = {
 
   SET_FLOWRITE_IN_FLIGHT_ANCHORS (state, anchors) {
     state.inFlightAnchors = cloneArray(anchors)
+  },
+
+  SET_FLOWRITE_LAST_AI_REVIEW_REQUEST (state, payload = null) {
+    state.lastAiReviewRequest = payload && typeof payload === 'object'
+      ? { ...payload }
+      : null
   },
 
   SET_FLOWRITE_MARGIN_THREAD_FOCUS (state, threadId) {
@@ -193,6 +203,7 @@ const mutations = {
     state.composerMarginThreadWasAnnotationsPaneOpen = false
     state.inFlightAnchors = []
     state.saveCycleId = createSaveCycleId()
+    state.lastAiReviewRequest = null
     state.availability = normalizeAvailability(payload.availability)
     state.runtime = {
       ...createRuntimeState(),
@@ -271,7 +282,7 @@ const actions = {
     return payload
   },
 
-  UPDATE_FLOWRITE_RUNTIME_PROGRESS ({ commit, state }, payload = {}) {
+  UPDATE_FLOWRITE_RUNTIME_PROGRESS ({ commit, state, dispatch }, payload = {}) {
     commit('SET_FLOWRITE_RUNTIME_PROGRESS', payload)
 
     if (Object.prototype.hasOwnProperty.call(payload, 'inFlightAnchors')) {
@@ -289,6 +300,27 @@ const actions = {
       state.comments.some(thread => thread && thread.scope === SCOPE_MARGIN)
     ) {
       commit('SET_FLOWRITE_ANNOTATIONS_PANE', true)
+    }
+
+    if (
+      payload.phase === PHASE_AI_REVIEW &&
+      payload.status === RUNTIME_STATUS_FAILED &&
+      state.lastAiReviewRequest
+    ) {
+      const normalizedError = normalizeError(payload.error)
+      const errorMessage = normalizedError
+        ? normalizedError.message
+        : 'Flowrite AI Review failed.'
+
+      notice.notify({
+        time: 0,
+        title: 'Flowrite AI Review failed',
+        message: `${errorMessage} Retry the same review?`,
+        type: 'error',
+        showConfirm: true
+      }).then(() => {
+        return dispatch('RUN_AI_REVIEW', state.lastAiReviewRequest)
+      }).catch(() => {})
     }
   },
 
@@ -394,7 +426,7 @@ const actions = {
     return result
   },
 
-  async RUN_AI_REVIEW ({ rootState }, payload = {}) {
+  async RUN_AI_REVIEW ({ commit, rootState }, payload = {}) {
     const currentFile = rootState.editor && rootState.editor.currentFile
       ? rootState.editor.currentFile
       : {}
@@ -405,16 +437,23 @@ const actions = {
     const prompt = typeof payload === 'string'
       ? ''
       : (payload.prompt || '')
+    const trimmedPrompt = typeof prompt === 'string' ? prompt.trim() : ''
 
     if (!pathname) {
       throw new Error('Save this document before running Flowrite AI Review.')
     }
 
+    const reviewRequest = {
+      reviewPersona,
+      prompt: trimmedPrompt
+    }
+    commit('SET_FLOWRITE_LAST_AI_REVIEW_REQUEST', reviewRequest)
+
     return ipcRenderer.invoke('mt::flowrite:run-ai-review', {
       pathname,
       markdown: typeof currentFile.markdown === 'string' ? currentFile.markdown : '',
       reviewPersona,
-      prompt
+      prompt: trimmedPrompt
     })
   },
 
