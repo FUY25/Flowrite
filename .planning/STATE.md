@@ -49,6 +49,10 @@ Recent decisions affecting current work:
 
 None yet.
 
+### Roadmap Evolution
+
+- Phase 4 added: Persona Voice Design — expand persona instructions to rich behavioral profiles
+
 ### Blockers/Concerns
 
 - Token estimation uses char/4 heuristic -- may misfire for CJK text (not blocking Phase 1, noted for later)

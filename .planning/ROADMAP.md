@@ -72,3 +72,13 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. AI Backend Reliability | 0/2 | Not started | - |
 | 2. UI Feedback & Safety | 0/2 | Not started | - |
 | 3. Cleanup & Verification | 0/1 | Not started | - |
+
+### Phase 4: Persona Voice Design - Expand the three persona instructions (Friendly, Critical, Improvement) from single sentences to rich behavioral profiles with tone examples, focus areas, and anti-patterns
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 3
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 4 to break down)
