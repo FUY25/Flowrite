@@ -4,11 +4,14 @@ import log from 'electron-log'
 import { getSidecarPaths } from './sidecarPaths'
 import { resolveMarkdownFilePath } from '../../filesystem/markdownPaths'
 import { isPlainObject } from '../../../flowrite/objectUtils'
+import { rememberDocumentIndexEntry } from './documentIndex'
 
 const DOCUMENT_VERSION = 1
 
 export const DEFAULT_DOCUMENT_RECORD = {
   version: DOCUMENT_VERSION,
+  documentId: '',
+  lastKnownMarkdownPath: '',
   lastSnapshotSaveCycleId: null,
   conversationHistory: [],
   historyTokenEstimate: 0,
@@ -143,14 +146,39 @@ export const saveDocumentRecord = async (pathname, record) => {
     throw new Error('Flowrite document sidecar must be a JSON object.')
   }
 
-  const { documentFile } = getSidecarPaths(pathname)
+  pathname = resolveMarkdownFilePath(pathname)
+  const { documentFile, documentDir } = getSidecarPaths(pathname)
   const nextRecord = {
     ...DEFAULT_DOCUMENT_RECORD,
     ...record,
+    lastKnownMarkdownPath: record.lastKnownMarkdownPath || pathname,
     version: DOCUMENT_VERSION
   }
 
-  await writeJsonSidecar(documentFile, nextRecord)
+  const documentBackup = await movePathToBackup(documentFile)
+
+  try {
+    await writeJsonSidecar(documentFile, nextRecord)
+
+    await rememberDocumentIndexEntry({
+      documentId: nextRecord.documentId,
+      pathname: nextRecord.lastKnownMarkdownPath,
+      documentDir
+    })
+  } catch (error) {
+    if (await fs.pathExists(documentFile)) {
+      await fs.remove(documentFile)
+    }
+    await restoreBackup(documentBackup, documentFile)
+    throw error
+  }
+
+  try {
+    await cleanupBackup(documentBackup)
+  } catch (error) {
+    log.warn(`Flowrite document backup cleanup failed for "${pathname}".`, error)
+  }
+
   return nextRecord
 }
 

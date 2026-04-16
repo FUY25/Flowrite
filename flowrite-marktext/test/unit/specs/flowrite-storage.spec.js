@@ -7,6 +7,11 @@ import {
   getSidecarPaths
 } from '../../../src/main/flowrite/files/sidecarPaths'
 import {
+  configureDocumentIndex,
+  findDocumentIndexEntry,
+  rememberDocumentIndexEntry
+} from '../../../src/main/flowrite/files/documentIndex'
+import {
   loadDocumentRecord,
   migrateSidecarDirectory,
   saveDocumentRecord,
@@ -61,6 +66,7 @@ describe('Flowrite sidecar storage', function () {
   })
 
   afterEach(async function () {
+    configureDocumentIndex({ rootPath: '' })
     await fs.remove(tempRoot)
   })
 
@@ -953,5 +959,163 @@ describe('Flowrite sidecar storage', function () {
     })
 
     expect(await fs.readFile(pathname, 'utf8')).to.equal('<!-- flowrite:id=doc-123 -->\r\n\r\n# Draft\r\n')
+  })
+
+  it('persists documentId in document.json', async function () {
+    const pathname = path.join(tempRoot, 'identity-record.md')
+
+    await saveDocumentRecord(pathname, {
+      documentId: 'doc-123'
+    })
+
+    const documentRecord = await loadDocumentRecord(pathname)
+    expect(documentRecord.documentId).to.equal('doc-123')
+  })
+
+  it('records the last known path for a document id in the global index', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    await rememberDocumentIndexEntry({
+      documentId: 'doc-123',
+      pathname: '/tmp/draft.md',
+      documentDir: '/tmp/.flowrite/draft-aaaa1111'
+    })
+
+    const entry = await findDocumentIndexEntry('doc-123')
+    expect(entry.pathname).to.equal('/tmp/draft.md')
+  })
+
+  it('preserves both document index entries when in-process writes overlap', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const indexPath = path.join(tempRoot, 'flowrite', 'document-index.json')
+    const originalMove = fs.move
+    let releaseFirstMove
+    let firstMoveStartedResolve
+    const firstMoveStarted = new Promise(resolve => {
+      firstMoveStartedResolve = resolve
+    })
+    let delayedFirstMove = false
+
+    fs.move = async function (src, dest, options) {
+      if (!delayedFirstMove && dest === indexPath) {
+        delayedFirstMove = true
+        firstMoveStartedResolve()
+        await new Promise(resolve => {
+          releaseFirstMove = resolve
+        })
+      }
+      return originalMove.call(this, src, dest, options)
+    }
+
+    try {
+      const firstWrite = rememberDocumentIndexEntry({
+        documentId: 'doc-123',
+        pathname: '/tmp/first.md',
+        documentDir: '/tmp/.flowrite/first-aaaa1111'
+      })
+
+      await firstMoveStarted
+
+      const secondWrite = rememberDocumentIndexEntry({
+        documentId: 'doc-456',
+        pathname: '/tmp/second.md',
+        documentDir: '/tmp/.flowrite/second-bbbb2222'
+      })
+
+      releaseFirstMove()
+      await Promise.all([firstWrite, secondWrite])
+    } finally {
+      fs.move = originalMove
+    }
+
+    const firstEntry = await findDocumentIndexEntry('doc-123')
+    const secondEntry = await findDocumentIndexEntry('doc-456')
+
+    expect(firstEntry.pathname).to.equal('/tmp/first.md')
+    expect(secondEntry.pathname).to.equal('/tmp/second.md')
+  })
+
+  it('rolls back document.json when document index persistence fails', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const pathname = path.join(tempRoot, 'identity-record-rollback.md')
+    const indexPath = path.join(tempRoot, 'flowrite', 'document-index.json')
+
+    await saveDocumentRecord(pathname, {
+      documentId: 'doc-old'
+    })
+
+    const originalMove = fs.move
+    fs.move = async function (src, dest, options) {
+      if (dest === indexPath) {
+        throw new Error('forced document index failure')
+      }
+      return originalMove.call(this, src, dest, options)
+    }
+
+    let error = null
+    try {
+      await saveDocumentRecord(pathname, {
+        documentId: 'doc-new'
+      })
+    } catch (err) {
+      error = err
+    } finally {
+      fs.move = originalMove
+    }
+
+    const documentRecord = await loadDocumentRecord(pathname)
+    const oldEntry = await findDocumentIndexEntry('doc-old')
+    const newEntry = await findDocumentIndexEntry('doc-new')
+
+    expect(error).to.be.an('error')
+    expect(error.message).to.equal('forced document index failure')
+    expect(documentRecord.documentId).to.equal('doc-old')
+    expect(oldEntry.pathname).to.equal(pathname)
+    expect(newEntry).to.equal(null)
+  })
+
+  it('keeps persisted document.json and index entry when backup cleanup fails after commit', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const pathname = path.join(tempRoot, 'identity-record-cleanup.md')
+    const documentFile = getSidecarPaths(pathname).documentFile
+
+    await saveDocumentRecord(pathname, {
+      documentId: 'doc-old'
+    })
+
+    const originalRemove = fs.remove
+    fs.remove = async function (targetPath, ...rest) {
+      if (
+        typeof targetPath === 'string' &&
+        path.dirname(targetPath) === path.dirname(documentFile) &&
+        path.basename(targetPath).includes('.bak')
+      ) {
+        throw new Error('forced backup cleanup failure')
+      }
+      return originalRemove.call(this, targetPath, ...rest)
+    }
+
+    let error = null
+    try {
+      await saveDocumentRecord(pathname, {
+        documentId: 'doc-new'
+      })
+    } catch (err) {
+      error = err
+    } finally {
+      fs.remove = originalRemove
+    }
+
+    const documentRecord = await loadDocumentRecord(pathname)
+    const oldEntry = await findDocumentIndexEntry('doc-old')
+    const newEntry = await findDocumentIndexEntry('doc-new')
+
+    expect(error).to.equal(null)
+    expect(documentRecord.documentId).to.equal('doc-new')
+    expect(oldEntry.pathname).to.equal(pathname)
+    expect(newEntry.pathname).to.equal(pathname)
   })
 })

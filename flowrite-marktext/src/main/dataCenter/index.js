@@ -14,6 +14,7 @@ import { getOnlineStatus } from '../flowrite/network/status'
 import { loadDocumentRecord } from '../flowrite/files/documentStore'
 import { loadComments } from '../flowrite/files/commentsStore'
 import { loadSuggestions } from '../flowrite/files/suggestionsStore'
+import { configureDocumentIndex } from '../flowrite/files/documentIndex'
 
 const DATA_CENTER_NAME = 'dataCenter'
 
@@ -38,6 +39,9 @@ class DataCenter extends EventEmitter {
     })
     this.flowriteController = new FlowriteControllerBridge({
       flowriteSettings: this.flowriteSettings
+    })
+    configureDocumentIndex({
+      rootPath: this.userDataPath
     })
 
     this.init()
