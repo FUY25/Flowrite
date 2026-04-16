@@ -144,4 +144,56 @@ describe('Flowrite margin composer', function () {
       vm.$destroy()
     }
   })
+
+  it('does not treat an older persisted user comment on the same anchor as a successful new submit', async function () {
+    let closeCalls = 0
+    const store = createStore({
+      submitAction: () => Promise.reject(new Error('Network offline')),
+      closeAction: () => {
+        closeCalls += 1
+        return Promise.resolve()
+      }
+    })
+    store.commit('SET_COMMENTS', [{
+      id: 'thread-margin-existing',
+      scope: 'margin',
+      anchor: {
+        quote: 'reflective paragraph'
+      },
+      comments: [{
+        id: 'comment-user-existing',
+        author: 'user',
+        body: 'Older note that should not satisfy the new submit.'
+      }]
+    }])
+
+    const vm = mountComposer(store, {
+      quote: 'reflective paragraph'
+    })
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+      const textarea = vm.$el.querySelector('[data-testid="flowrite-margin-thread-input"]')
+      expect(textarea).to.not.equal(null)
+      textarea.value = 'New question that failed to save.'
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+      await Vue.nextTick()
+
+      const submitButton = vm.$el.querySelector('[data-testid="flowrite-margin-thread-submit"]')
+      expect(submitButton).to.not.equal(null)
+      submitButton.click()
+      await Vue.nextTick()
+      await Promise.resolve()
+      await Vue.nextTick()
+
+      expect(closeCalls).to.equal(0)
+      expect(vm.$children[0].error).to.equal('Network offline')
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
 })

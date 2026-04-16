@@ -16,7 +16,7 @@ import {
   REVIEW_PERSONA_INSTRUCTIONS,
   trimConversationHistory
 } from '../../../src/main/flowrite/ai/promptBuilder'
-import { MAX_TOOL_ITERATIONS } from '../../../src/main/flowrite/ai/runtimeWorker'
+import { MAX_TOOL_ITERATIONS, buildRuntimeWorkerSource } from '../../../src/main/flowrite/ai/runtimeWorker'
 import { loadDocumentRecord } from '../../../src/main/flowrite/files/documentStore'
 import * as documentStore from '../../../src/main/flowrite/files/documentStore'
 
@@ -401,6 +401,14 @@ describe('Flowrite AI runtime', function () {
     expect(fakeGlobal.FormData).to.equal(fakeWebApis.FormData)
   })
 
+  it('keeps the eval worker self-contained instead of requiring a separate local bootstrap module path', function () {
+    const workerSource = buildRuntimeWorkerSource()
+
+    expect(workerSource).to.be.a('string')
+    expect(workerSource).to.not.include('webApiModulePath')
+    expect(workerSource).to.not.include('runtimeRequire(workerData.webApiModulePath)')
+  })
+
   it('only exposes rewrite tools for explicit suggestion requests', function () {
     const threadReplyRequest = buildRuntimeRequest({
       jobType: 'thread_reply',
@@ -576,6 +584,95 @@ describe('Flowrite AI runtime', function () {
       expect(firstError).to.be.an('error')
       expect(secondResult.finalText).to.equal('Recovered.')
       expect(createWorkerCalls).to.equal(2)
+    } finally {
+      await manager.dispose()
+      workers.forEach(worker => worker.removeAllListeners())
+    }
+  })
+
+  it('allows different documents to run concurrently without one AI job blocking another', async function () {
+    const workers = []
+    const completionOrder = []
+    const inMemoryDocuments = new Map()
+
+    const documentStoreStub = {
+      async loadDocumentRecord (documentPath) {
+        return inMemoryDocuments.get(documentPath) || {
+          conversationHistory: [],
+          historyTokenEstimate: 0,
+          lastReviewPersona: 'friendly'
+        }
+      },
+      async saveDocumentRecord (documentPath, record) {
+        inMemoryDocuments.set(documentPath, record)
+        return record
+      }
+    }
+
+    const createWorker = () => {
+      const worker = new (require('events').EventEmitter)()
+      worker.postMessage = message => {
+        if (message.eventType !== 'run_job') {
+          return
+        }
+
+        const documentPath = message.payload.request.metadata.documentPath
+        const delay = documentPath.includes('slow') ? 40 : 5
+        setTimeout(() => {
+          completionOrder.push(path.basename(documentPath))
+          worker.emit('message', {
+            requestId: message.requestId,
+            eventType: 'completed',
+            payload: {
+              finalText: path.basename(documentPath),
+              conversationEntries: [{
+                role: 'assistant',
+                content: [{ type: 'text', text: path.basename(documentPath) }]
+              }]
+            }
+          })
+        }, delay)
+      }
+      worker.terminate = async () => 0
+      workers.push(worker)
+      setTimeout(() => worker.emit('message', { eventType: 'ready' }), 0)
+      return worker
+    }
+
+    const manager = new FlowriteRuntimeManager({
+      runtimeConfig: {
+        apiKey: 'test-key',
+        clientModulePath: 'stub-runtime',
+        createWorker,
+        documentStore: documentStoreStub
+      }
+    })
+
+    try {
+      const slowPath = path.join(tempRoot, 'slow.md')
+      const fastPath = path.join(tempRoot, 'fast.md')
+      const [slowResult, fastResult] = await Promise.all([
+        manager.runJob({
+          jobType: 'thread_reply',
+          documentPath: slowPath,
+          payload: {
+            markdown: '# Slow\n',
+            prompt: 'Slow first.'
+          }
+        }),
+        manager.runJob({
+          jobType: 'thread_reply',
+          documentPath: fastPath,
+          payload: {
+            markdown: '# Fast\n',
+            prompt: 'Fast second.'
+          }
+        })
+      ])
+
+      expect(completionOrder).to.deep.equal(['fast.md', 'slow.md'])
+      expect(fastResult.finalText).to.equal('fast.md')
+      expect(slowResult.finalText).to.equal('slow.md')
     } finally {
       await manager.dispose()
       workers.forEach(worker => worker.removeAllListeners())

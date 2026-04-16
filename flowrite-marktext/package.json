@@ -205,5 +205,8 @@
       "email": "hfelix@protonmail.ch",
       "url": "https://github.com/fxha"
     }
-  ]
+  ],
+  "volta": {
+    "node": "22.12.0"
+  }
 }

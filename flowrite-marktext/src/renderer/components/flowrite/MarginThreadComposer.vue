@@ -111,8 +111,8 @@ export default {
       })
     },
 
-    closeAfterPersist (pendingBody) {
-      if (!this.hasPersistedCommentWithBody(pendingBody)) {
+    closeAfterPersist (pendingBody, existingCommentIds = new Set()) {
+      if (!this.findNewPersistedComment(pendingBody, existingCommentIds)) {
         return false
       }
 
@@ -122,23 +122,62 @@ export default {
       return true
     },
 
-    hasPersistedCommentWithBody (body) {
+    findNewPersistedComment (body, existingCommentIds = new Set()) {
       const trimmedBody = typeof body === 'string' ? body.trim() : ''
       if (!trimmedBody || !this.sourceAnchor) {
-        return false
+        return null
       }
 
       const comments = this.$store && this.$store.state && this.$store.state.flowrite
         ? this.$store.state.flowrite.comments
         : []
 
-      return Array.isArray(comments) && comments.some(thread => (
-        thread &&
-        thread.scope === SCOPE_MARGIN &&
-        this.anchorsMatch(thread.anchor, this.sourceAnchor) &&
-        Array.isArray(thread.comments) &&
-        thread.comments.some(comment => comment && comment.author === AUTHOR_USER)
-      ))
+      if (!Array.isArray(comments)) {
+        return null
+      }
+
+      for (const thread of comments) {
+        if (!thread || thread.scope !== SCOPE_MARGIN || !this.anchorsMatch(thread.anchor, this.sourceAnchor) || !Array.isArray(thread.comments)) {
+          continue
+        }
+
+        const matchingComment = thread.comments.find(comment => {
+          return comment &&
+            comment.author === AUTHOR_USER &&
+            typeof comment.body === 'string' &&
+            comment.body.trim() === trimmedBody &&
+            !existingCommentIds.has(comment.id)
+        })
+
+        if (matchingComment) {
+          return matchingComment
+        }
+      }
+
+      return null
+    },
+
+    collectExistingUserCommentIds (anchor) {
+      const comments = this.$store && this.$store.state && this.$store.state.flowrite
+        ? this.$store.state.flowrite.comments
+        : []
+
+      if (!anchor || !Array.isArray(comments)) {
+        return new Set()
+      }
+
+      return new Set(
+        comments
+          .filter(thread => (
+            thread &&
+            thread.scope === SCOPE_MARGIN &&
+            this.anchorsMatch(thread.anchor, anchor) &&
+            Array.isArray(thread.comments)
+          ))
+          .flatMap(thread => thread.comments)
+          .filter(comment => comment && comment.author === AUTHOR_USER && comment.id)
+          .map(comment => comment.id)
+      )
     },
 
     async submitComposer ({ body, anchor, resolve, reject } = {}) {
@@ -150,6 +189,7 @@ export default {
       }
 
       const pendingBody = body.trim()
+      const existingCommentIds = this.collectExistingUserCommentIds(anchor)
       this.submitting = true
       this.error = ''
       let unwatch = null
@@ -163,7 +203,7 @@ export default {
         unwatch = this.$store.watch(
           state => state.flowrite.comments,
           () => {
-            if (unwatch && this.closeAfterPersist(pendingBody)) {
+            if (unwatch && this.closeAfterPersist(pendingBody, existingCommentIds)) {
               unwatch()
               unwatch = null
             }
@@ -174,13 +214,13 @@ export default {
         )
 
         await submitPromise
-        this.closeAfterPersist(pendingBody)
+        this.closeAfterPersist(pendingBody, existingCommentIds)
 
         if (typeof resolve === 'function') {
           resolve()
         }
       } catch (error) {
-        if (this.closeAfterPersist(pendingBody)) {
+        if (this.closeAfterPersist(pendingBody, existingCommentIds)) {
           if (typeof resolve === 'function') {
             resolve()
           }

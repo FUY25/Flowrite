@@ -430,6 +430,106 @@ describe('Flowrite sidecar storage', function () {
     }])
   })
 
+  it('rolls back the deleted comment thread when linked suggestion cleanup fails after comment persistence begins', async function () {
+    const pathname = path.join(tempRoot, 'delete-thread-atomic-rollback.md')
+    const { suggestionsFile } = getSidecarPaths(pathname)
+    const anchor = createMarginAnchor({
+      start: { key: 'ag-para-1', offset: 0 },
+      end: { key: 'ag-para-1', offset: 9 },
+      quote: 'Margin text',
+      startBlockText: 'Margin text with a useful note.',
+      endBlockText: 'Margin text with a useful note.'
+    })
+
+    await saveComments(pathname, [
+      {
+        id: 'margin-thread-1',
+        scope: SCOPE_MARGIN,
+        anchor,
+        createdAt: '2026-04-09T10:00:00.000Z',
+        updatedAt: '2026-04-09T10:05:00.000Z',
+        comments: [{
+          id: 'margin-comment-1',
+          author: 'assistant',
+          body: 'Delete this thread.',
+          createdAt: '2026-04-09T10:05:00.000Z'
+        }]
+      },
+      {
+        id: 'margin-thread-2',
+        scope: SCOPE_MARGIN,
+        anchor: createMarginAnchor({
+          start: { key: 'ag-para-2', offset: 0 },
+          end: { key: 'ag-para-2', offset: 6 },
+          quote: 'Keep me',
+          startBlockText: 'Keep me around.',
+          endBlockText: 'Keep me around.'
+        }),
+        createdAt: '2026-04-09T11:00:00.000Z',
+        updatedAt: '2026-04-09T11:00:00.000Z',
+        comments: [{
+          id: 'margin-comment-2',
+          author: 'assistant',
+          body: 'Stay visible.',
+          createdAt: '2026-04-09T11:00:00.000Z'
+        }]
+      }
+    ])
+
+    await saveSuggestions(pathname, [
+      {
+        id: 'suggestion-delete-me',
+        threadId: 'margin-thread-1',
+        status: 'pending',
+        createdAt: '2026-04-09T10:05:00.000Z'
+      },
+      {
+        id: 'suggestion-keep-me',
+        threadId: 'margin-thread-2',
+        status: 'pending',
+        createdAt: '2026-04-09T11:00:00.000Z'
+      }
+    ])
+
+    const originalMove = fs.move
+    let commentsWriteSucceeded = false
+    fs.move = async function (src, dest, options) {
+      if (dest.endsWith('comments.json')) {
+        commentsWriteSucceeded = true
+      }
+      if (dest === suggestionsFile) {
+        throw new Error('forced suggestions write failure')
+      }
+      return originalMove.call(this, src, dest, options)
+    }
+
+    let error = null
+    try {
+      await deleteThreadFromComments(pathname, {
+        threadId: 'margin-thread-1'
+      })
+    } catch (err) {
+      error = err
+    } finally {
+      fs.move = originalMove
+    }
+
+    const comments = await loadComments(pathname)
+    const suggestions = await loadSuggestions(pathname)
+
+    expect(commentsWriteSucceeded).to.equal(true)
+    expect(error).to.be.an('error')
+    expect(error.message).to.equal('forced suggestions write failure')
+    expect(comments.map(thread => thread.id)).to.deep.equal([
+      'margin-thread-1',
+      'margin-thread-2'
+    ])
+    expect(suggestions.map(entry => entry.id)).to.deep.equal([
+      'suggestion-delete-me',
+      'suggestion-keep-me'
+    ])
+  })
+
   it('preserves explicit cowriting interaction mode through save and load', async function () {
     const pathname = path.join(tempRoot, 'cowriting-thread.md')
 

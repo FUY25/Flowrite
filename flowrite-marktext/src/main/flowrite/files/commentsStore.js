@@ -1,5 +1,5 @@
 import { getSidecarPaths } from './sidecarPaths'
-import { loadJsonSidecar, quarantineCorruptJson, writeJsonSidecar } from './documentStore'
+import { createSidecarSaveTransaction, loadJsonSidecar, quarantineCorruptJson, writeJsonSidecar } from './documentStore'
 import { loadSuggestions, saveSuggestions } from './suggestionsStore'
 import { cloneMarginAnchor } from '../../../flowrite/anchors'
 import { isPlainObject } from '../../../flowrite/objectUtils'
@@ -308,13 +308,15 @@ export const deleteThreadFromComments = async (pathname, {
   }
 
   const nextSuggestions = suggestions.filter(suggestion => suggestion.threadId !== threadId)
-  if (nextSuggestions.length !== suggestions.length) {
-    await saveSuggestions(pathname, nextSuggestions)
-  }
+  const transaction = await createSidecarSaveTransaction(pathname)
 
   try {
     const persistedComments = prepareCommentsForSave(nextComments)
     await writePreparedComments(pathname, persistedComments)
+    if (nextSuggestions.length !== suggestions.length) {
+      await saveSuggestions(pathname, nextSuggestions)
+    }
+    await transaction.commit()
 
     return {
       pathname,
@@ -323,13 +325,7 @@ export const deleteThreadFromComments = async (pathname, {
       deleted: true
     }
   } catch (error) {
-    if (nextSuggestions.length !== suggestions.length) {
-      try {
-        await saveSuggestions(pathname, suggestions)
-      } catch (_) {
-        // Best-effort rollback. The original write failure is the actionable one.
-      }
-    }
+    await transaction.rollback()
     throw error
   }
 }
