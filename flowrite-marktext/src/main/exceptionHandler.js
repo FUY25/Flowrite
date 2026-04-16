@@ -10,6 +10,7 @@ import { app, clipboard, crashReporter, dialog, ipcMain } from 'electron'
 import os from 'os'
 import log from 'electron-log'
 import { createAndOpenGitHubIssueUrl } from './utils/createGitHubIssue'
+import { isBrokenPipeError } from './utils/safeConsoleTransport'
 
 const EXIT_ON_ERROR = !!process.env.MARKTEXT_EXIT_ON_ERROR
 const SHOW_ERROR_DIALOG = !process.env.MARKTEXT_ERROR_INTERACTION
@@ -37,7 +38,14 @@ const handleError = async (title, error, type) => {
 
   // Write error into file
   if (type === 'main') {
-    logger(exceptionToString(error, type))
+    try {
+      logger(exceptionToString(error, type))
+    } catch (loggingError) {
+      // Exception reporting should not crash while trying to log the crash itself.
+      if (!isBrokenPipeError(loggingError)) {
+        // Swallow logging failures here and continue showing the original error dialog.
+      }
+    }
   }
 
   if (EXIT_ON_ERROR) {

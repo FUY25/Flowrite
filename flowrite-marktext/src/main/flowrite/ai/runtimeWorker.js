@@ -180,7 +180,7 @@ const createJobRunner = (transport, workerData) => {
   }
 }
 
-const buildRuntimeWorkerSource = () => `
+export const buildRuntimeWorkerSource = () => `
   const { parentPort, workerData } = require('worker_threads')
   const runtimeRequire = typeof __non_webpack_require__ === 'function'
     ? __non_webpack_require__
@@ -212,6 +212,47 @@ const buildRuntimeWorkerSource = () => `
     content: typeof result === 'string' ? result : JSON.stringify(result)
   })
 
+  const resolveWorkerFetch = () => {
+    const hasAllRequiredApis = typeof globalThis.fetch === 'function' &&
+      typeof globalThis.Headers === 'function' &&
+      typeof globalThis.Request === 'function' &&
+      typeof globalThis.Response === 'function' &&
+      typeof globalThis.FormData === 'function'
+
+    if (!hasAllRequiredApis) {
+      const undiciModule = require('undici')
+      const {
+        fetch,
+        Headers,
+        Request,
+        Response,
+        FormData,
+        File
+      } = undiciModule
+
+      if (typeof globalThis.fetch !== 'function') {
+        globalThis.fetch = fetch
+      }
+      if (typeof globalThis.Headers !== 'function') {
+        globalThis.Headers = Headers
+      }
+      if (typeof globalThis.Request !== 'function') {
+        globalThis.Request = Request
+      }
+      if (typeof globalThis.Response !== 'function') {
+        globalThis.Response = Response
+      }
+      if (typeof globalThis.FormData !== 'function') {
+        globalThis.FormData = FormData
+      }
+      if (typeof globalThis.File !== 'function' && typeof File === 'function') {
+        globalThis.File = File
+      }
+    }
+
+    return globalThis.fetch.bind(globalThis)
+  }
+
   const createClientRuntime = clientConfig => {
     if (workerData.clientModulePath) {
       const clientModule = runtimeRequire(workerData.clientModulePath)
@@ -223,14 +264,12 @@ const buildRuntimeWorkerSource = () => `
     const anthropicModule = runtimeRequire('@anthropic-ai/sdk')
     const Anthropic = anthropicModule.default || anthropicModule
 
-    const webApiPolyfills = runtimeRequire(workerData.webApiModulePath)
-
     return {
       client: new Anthropic({
         apiKey: clientConfig.apiKey,
         baseURL: clientConfig.baseURL,
         defaultHeaders: clientConfig.defaultHeaders,
-        fetch: webApiPolyfills.resolveNodeFetch(globalThis)
+        fetch: resolveWorkerFetch()
       }),
       model: clientConfig.model
     }
@@ -426,8 +465,7 @@ export const createRuntimeWorker = (runtimeConfig = {}) => {
     return new Worker(buildRuntimeWorkerSource(), {
       eval: true,
       workerData: {
-        clientModulePath: runtimeConfig.clientModulePath || null,
-        webApiModulePath: nodeCreateRequire(__filename).resolve('./webApiPolyfills.js')
+        clientModulePath: runtimeConfig.clientModulePath || null
       }
     })
   } catch (error) {

@@ -644,19 +644,25 @@ export class FlowriteController {
       // File doesn't exist yet — treat as empty
     }
 
+    let didChange = false
     const nextSuggestions = suggestions.map(entry => {
       if (entry.status !== SUGGESTION_STATUS_APPLIED_IN_BUFFER) {
         return entry
       }
 
       if (markdownContainsSuggestionText(markdown, entry)) {
+        const acceptedAt = entry.acceptedAt || new Date().toISOString()
+        if (entry.status !== SUGGESTION_STATUS_ACCEPTED || entry.acceptedAt !== acceptedAt) {
+          didChange = true
+        }
         return {
           ...entry,
           status: SUGGESTION_STATUS_ACCEPTED,
-          acceptedAt: entry.acceptedAt || new Date().toISOString()
+          acceptedAt
         }
       }
 
+      didChange = true
       return {
         ...entry,
         status: SUGGESTION_STATUS_PENDING,
@@ -666,7 +672,9 @@ export class FlowriteController {
       }
     })
 
-    await saveSuggestions(pathname, nextSuggestions)
+    if (didChange) {
+      await saveSuggestions(pathname, nextSuggestions)
+    }
     return nextSuggestions
   }
 

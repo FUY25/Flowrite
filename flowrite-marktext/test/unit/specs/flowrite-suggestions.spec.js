@@ -5,6 +5,7 @@ import { expect } from 'chai'
 import { FlowriteController } from '../../../src/main/flowrite/controller'
 import { saveSuggestions, loadSuggestions } from '../../../src/main/flowrite/files/suggestionsStore'
 import { listSnapshots } from '../../../src/main/flowrite/files/snapshotStore'
+import { getSidecarPaths } from '../../../src/main/flowrite/files/sidecarPaths'
 import {
   SUGGESTION_STATUS_PENDING,
   SUGGESTION_STATUS_APPLIED_IN_BUFFER,
@@ -139,6 +140,40 @@ describe('Flowrite suggestions', function () {
 
     expect(reconciled[0].status).to.equal(SUGGESTION_STATUS_PENDING)
     expect(reconciled[0].bufferAppliedAt).to.equal(null)
+  })
+
+  it('skips rewriting the suggestions sidecar when reconciliation finds no state changes', async function () {
+    await saveSuggestions(pathname, [{
+      id: 'suggestion-pending',
+      threadId: 'thread-1',
+      targetText: 'soft cadence',
+      suggestedText: 'sharper rhythm',
+      rationale: 'No write should happen when nothing changed.',
+      anchor: {
+        version: 1,
+        quote: 'soft cadence',
+        contextBefore: 'with a ',
+        contextAfter: '.',
+        start: { key: 'paragraph-1', offset: 33 },
+        end: { key: 'paragraph-1', offset: 45 }
+      },
+      status: SUGGESTION_STATUS_PENDING,
+      author: 'assistant',
+      createdAt: '2026-04-09T12:00:00.000Z'
+    }])
+
+    const { suggestionsFile } = getSidecarPaths(pathname)
+    const beforeStat = await fs.stat(suggestionsFile)
+    const beforeContents = await fs.readFile(suggestionsFile, 'utf8')
+
+    const reconciled = await controller.reconcileSuggestionsWithMarkdown(pathname)
+
+    const afterStat = await fs.stat(suggestionsFile)
+    const afterContents = await fs.readFile(suggestionsFile, 'utf8')
+
+    expect(reconciled[0].status).to.equal(SUGGESTION_STATUS_PENDING)
+    expect(afterStat.mtimeMs).to.equal(beforeStat.mtimeMs)
+    expect(afterContents).to.equal(beforeContents)
   })
 
   it('rejects a suggestion without mutating the markdown buffer', async function () {

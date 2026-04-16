@@ -47,7 +47,7 @@ export class FlowriteRuntimeManager {
       throw new Error('No Flowrite tool executor configured.')
     })
     this.pendingRequests = new Map()
-    this.queue = Promise.resolve()
+    this.documentQueues = new Map()
     this.readyPromise = null
     this.disposed = false
     this.worker = null
@@ -124,8 +124,15 @@ export class FlowriteRuntimeManager {
       }
     }
 
-    const queued = this.queue.then(run)
-    this.queue = queued.catch(() => {})
+    const queueKey = documentPath || '__global__'
+    const previous = this.documentQueues.get(queueKey) || Promise.resolve()
+    const queued = previous.catch(() => {}).then(run)
+    const tracked = queued.finally(() => {
+      if (this.documentQueues.get(queueKey) === tracked) {
+        this.documentQueues.delete(queueKey)
+      }
+    })
+    this.documentQueues.set(queueKey, tracked)
     return queued
   }
 
