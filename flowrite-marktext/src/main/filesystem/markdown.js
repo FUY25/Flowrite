@@ -6,7 +6,12 @@ import { LF_LINE_ENDING_REG, CRLF_LINE_ENDING_REG } from '../config'
 import { isDirectory2 } from 'common/filesystem'
 import { isMarkdownFile } from 'common/filesystem/paths'
 import { normalizeAndResolvePath } from '../filesystem'
-import { createSidecarSaveTransaction, loadDocumentRecord, saveDocumentRecord } from '../flowrite/files/documentStore'
+import {
+  createDocumentSaveRollbackContext,
+  createSidecarSaveTransaction,
+  rollbackDocumentIndexAfterFailedSave,
+  saveDocumentRecord
+} from '../flowrite/files/documentStore'
 import { saveComments } from '../flowrite/files/commentsStore'
 import {
   ensureDocumentIdentityInMarkdown,
@@ -79,6 +84,7 @@ export const writeMarkdownFile = (pathname, content, options, saveContext = {}) 
   }
 
   let sidecarTransaction = null
+  let documentSaveRollbackContext = null
 
   const persistFlowriteSidecars = async () => {
     const { flowrite } = saveContext
@@ -100,11 +106,8 @@ export const writeMarkdownFile = (pathname, content, options, saveContext = {}) 
     }
 
     if (document !== undefined) {
-      const currentDocumentRecord = await loadDocumentRecord(resolvedPath)
-      await saveDocumentRecord(resolvedPath, {
-        ...currentDocumentRecord,
-        ...document
-      })
+      documentSaveRollbackContext = await createDocumentSaveRollbackContext(resolvedPath, document)
+      await saveDocumentRecord(resolvedPath, documentSaveRollbackContext.nextRecord)
     }
 
     if (comments !== undefined) {
@@ -130,6 +133,9 @@ export const writeMarkdownFile = (pathname, content, options, saveContext = {}) 
       }
       if (sidecarTransaction) {
         await sidecarTransaction.rollback()
+      }
+      if (documentSaveRollbackContext) {
+        await rollbackDocumentIndexAfterFailedSave(documentSaveRollbackContext)
       }
       throw error
     })

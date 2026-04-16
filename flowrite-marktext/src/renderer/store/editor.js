@@ -303,12 +303,23 @@ const mutations = {
       state.toc = []
     }
   },
-  RENAME_IF_NEEDED (state, { src, dest }) {
-    const { tabs } = state
+  RENAME_IF_NEEDED (state, payload = {}) {
+    const { tabs, currentFile } = state
+    const pathRemaps = payload.pathRemaps && payload.pathRemaps.length
+      ? payload.pathRemaps
+      : [{ src: payload.src, dest: payload.dest }]
+
     tabs.forEach(f => {
-      if (f.pathname === src) {
-        f.pathname = dest
-        f.filename = path.basename(dest)
+      const remap = pathRemaps.find(item => f.pathname === item.src)
+      if (!remap) {
+        return
+      }
+
+      f.pathname = remap.dest
+      f.filename = path.basename(remap.dest)
+
+      if (f.id === currentFile.id) {
+        window.DIRNAME = remap.dest ? path.dirname(remap.dest) : ''
       }
     })
   },

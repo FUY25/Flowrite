@@ -343,13 +343,12 @@ class EditorWindow extends BaseWindow {
     const { _openedFiles, browserWindow } = this
     const index = _openedFiles.findIndex(p => p === oldPathname)
     if (index === -1) {
-      // The old path was not found but add the new one.
-      _openedFiles.push(pathname)
-    } else {
-      _openedFiles[index] = pathname
+      return false
     }
+    _openedFiles[index] = pathname
     ipcMain.emit('watcher-unwatch-file', browserWindow, oldPathname)
     ipcMain.emit('watcher-watch-file', browserWindow, pathname)
+    return true
   }
 
   /**

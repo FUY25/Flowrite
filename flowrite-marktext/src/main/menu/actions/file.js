@@ -9,7 +9,10 @@ import { EXTENSION_HASN, PANDOC_EXTENSIONS, URL_REG } from '../../config'
 import { normalizeAndResolvePath, writeFile } from '../../filesystem'
 import { writeMarkdownFile } from '../../filesystem/markdown'
 import { resolveMarkdownFilePath } from '../../filesystem/markdownPaths'
-import { moveDocumentWithSidecars } from '../../flowrite/files/documentStore'
+import {
+  moveDocumentWithSidecars,
+  moveFileSystemItemWithFlowriteIdentity
+} from '../../flowrite/files/documentStore'
 import { getPath, getRecommendTitleFromMarkdownString } from '../../utils'
 import pandoc from '../../utils/pandoc'
 
@@ -319,6 +322,21 @@ ipcMain.on('mt::response-export', handleResponseForExport)
 
 ipcMain.on('mt::response-print', handleResponseForPrint)
 
+ipcMain.handle('mt::fs-move-item', async (e, { src, dest } = {}) => {
+  const result = await moveFileSystemItemWithFlowriteIdentity(src, dest)
+  const win = BrowserWindow.fromWebContents(e.sender)
+  if (win) {
+    const pathRemaps = result.pathRemaps && result.pathRemaps.length
+      ? result.pathRemaps
+      : [{ src: result.src, dest: result.dest }]
+
+    for (const remap of pathRemaps) {
+      ipcMain.emit('window-change-file-path', win.id, remap.dest, remap.src)
+    }
+  }
+  return result
+})
+
 ipcMain.on('mt::window::drop', async (e, fileList) => {
   const win = BrowserWindow.fromWebContents(e.sender)
   for (const file of fileList) {
@@ -346,9 +364,22 @@ ipcMain.on('mt::rename', async (e, { id, pathname, newPathname }) => {
   if (canonicalPathname === canonicalNewPathname) return
   const win = BrowserWindow.fromWebContents(e.sender)
 
+  const rejectDirectoryDestination = async targetPathname => {
+    if (!await isDirectory(targetPathname)) {
+      return false
+    }
+
+    const error = new Error(`Destination is a directory: ${targetPathname}`)
+    log.error(`mt::rename: Cannot rename "${canonicalPathname}" to "${targetPathname}".\n${error.stack}`)
+    e.sender.send('mt::tab-save-failure', id, error.message)
+    return true
+  }
+
   const doRename = async () => {
     try {
-      await moveDocumentWithSidecars(canonicalPathname, canonicalNewPathname)
+      await moveDocumentWithSidecars(canonicalPathname, canonicalNewPathname, {
+        allowOverwrite: await exists(canonicalNewPathname)
+      })
       ipcMain.emit('window-change-file-path', win.id, canonicalNewPathname, canonicalPathname)
       e.sender.send('mt::set-pathname', {
         id,
@@ -359,6 +390,10 @@ ipcMain.on('mt::rename', async (e, { id, pathname, newPathname }) => {
       log.error(`mt::rename: Cannot rename "${canonicalPathname}" to "${canonicalNewPathname}".\n${err.stack}`)
       e.sender.send('mt::tab-save-failure', id, err.message)
     }
+  }
+
+  if (await rejectDirectoryDestination(canonicalNewPathname)) {
+    return
   }
 
   if (!await exists(canonicalNewPathname)) {
@@ -390,8 +425,16 @@ ipcMain.on('mt::response-file-move-to', async (e, { id, pathname }) => {
   if (filePath && !canceled) {
     const canonicalPathname = resolveMarkdownFilePath(pathname)
     const canonicalFilePath = resolveMarkdownFilePath(filePath)
+    if (await isDirectory(canonicalFilePath)) {
+      const error = new Error(`Destination is a directory: ${canonicalFilePath}`)
+      log.error(`mt::rename: Cannot rename "${canonicalPathname}" to "${canonicalFilePath}".\n${error.stack}`)
+      e.sender.send('mt::tab-save-failure', id, error.message)
+      return
+    }
     try {
-      await moveDocumentWithSidecars(canonicalPathname, canonicalFilePath)
+      await moveDocumentWithSidecars(canonicalPathname, canonicalFilePath, {
+        allowOverwrite: await exists(canonicalFilePath)
+      })
       ipcMain.emit('window-change-file-path', win.id, canonicalFilePath, canonicalPathname)
       e.sender.send('mt::set-pathname', { id, pathname: canonicalFilePath, filename: path.basename(canonicalFilePath) })
     } catch (err) {
