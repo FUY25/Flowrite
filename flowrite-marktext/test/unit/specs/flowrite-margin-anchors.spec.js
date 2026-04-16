@@ -92,7 +92,7 @@ describe('Flowrite margin anchors', function () {
     expect(resolution.ranges[1].paragraphId).to.equal('ag-2')
   })
 
-  it('marks the thread detached when the original paragraph ids are gone', function () {
+  it('reattaches when the original paragraph ids are gone but the anchored text still survives', function () {
     const anchor = createMarginAnchor({
       start: {
         key: 'ag-1',
@@ -112,10 +112,12 @@ describe('Flowrite margin anchors', function () {
       { id: 'ag-2-renamed', text: 'second para closes here and more' }
     ])
 
-    expect(resolution.status).to.equal('detached')
+    expect(resolution.status).to.equal(ANCHOR_ATTACHED)
+    expect(['ag-1-renamed', 'ag-2-renamed']).to.include(resolution.paragraphId)
+    expect(resolution.endOffset).to.be.greaterThan(resolution.startOffset)
   })
 
-  it('does not downgrade a failed cross-paragraph anchor into an unrelated single paragraph', function () {
+  it('keeps a cross-paragraph anchor in the local surviving passage instead of jumping to an unrelated duplicate', function () {
     const anchor = createMarginAnchor({
       start: {
         key: 'ag-1',
@@ -136,7 +138,8 @@ describe('Flowrite margin anchors', function () {
       { id: 'unrelated', text: 'first paragraph tail second para' }
     ])
 
-    expect(resolution.status).to.equal('detached')
+    expect(resolution.status).to.equal(ANCHOR_ATTACHED)
+    expect(resolution.paragraphId).to.equal('ag-1-renamed')
   })
 
   it('reattaches a merged cross-paragraph quote to the surviving local paragraph', function () {
@@ -265,7 +268,7 @@ describe('Flowrite margin anchors', function () {
     expect(resolution.ranges[1].paragraphId).to.equal('ag-2')
   })
 
-  it('marks the thread detached when there is no safe match', function () {
+  it('reattaches to the last surviving original letter when only one letter remains', function () {
     const anchor = createMarginAnchor({
       start: {
         key: 'ag-para-1',
@@ -282,9 +285,34 @@ describe('Flowrite margin anchors', function () {
 
     const resolution = resolveMarginAnchor(anchor, [{
       id: 'ag-para-2',
-      text: 'An abrupt closing line about thunder and gravel.'
+      text: 'A xxqz jynm wobus r with a soft cadence.'
     }])
 
-    expect(resolution.status).to.equal('detached')
+    expect(resolution.status).to.equal(ANCHOR_ATTACHED)
+    expect(resolution.paragraphId).to.equal('ag-para-2')
+    expect(resolution.endOffset - resolution.startOffset).to.equal(1)
+  })
+
+  it('marks the anchor missing when none of the original anchored text survives', function () {
+    const anchor = createMarginAnchor({
+      start: {
+        key: 'ag-para-1',
+        offset: 2
+      },
+      end: {
+        key: 'ag-para-1',
+        offset: 22
+      },
+      quote: 'reflective paragraph',
+      startBlockText: 'A reflective paragraph with a soft cadence.',
+      endBlockText: 'A reflective paragraph with a soft cadence.'
+    })
+
+    const resolution = resolveMarginAnchor(anchor, [{
+      id: 'ag-para-2',
+      text: 'A xxqz jynm wobus with a soft cadence.'
+    }])
+
+    expect(resolution.status).to.equal('missing')
   })
 })

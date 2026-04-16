@@ -1,4 +1,4 @@
-import { ANCHOR_DETACHED } from '../../../flowrite/constants'
+import { ANCHOR_MISSING } from '../../../flowrite/constants'
 import { FLOWRITE_MARGIN_THREAD_COMPOSER_ID } from '../../../flowrite/commentUi'
 
 export const createEmptyParagraphIndex = () => ({
@@ -61,6 +61,10 @@ export const resolveMarginParagraphIndex = (vm, paragraphIndex) => {
 
 export const getResolvedMarginRanges = thread => {
   const resolution = thread && thread.resolvedAnchor ? thread.resolvedAnchor : {}
+  if (resolution.status === ANCHOR_MISSING) {
+    return []
+  }
+
   return Array.isArray(resolution.ranges) && resolution.ranges.length
     ? resolution.ranges
     : [{
@@ -83,6 +87,10 @@ export const resolveMarginThreadVerticalPosition = ({
   verticalOffset = 0
 } = {}) => {
   const resolution = thread && thread.resolvedAnchor ? thread.resolvedAnchor : {}
+  if (resolution.status === ANCHOR_MISSING) {
+    return null
+  }
+
   const [firstRange] = getResolvedMarginRanges(thread)
 
   if (!firstRange || !editorRect || !editorContainer) {
@@ -95,39 +103,19 @@ export const resolveMarginThreadVerticalPosition = ({
     : null
 
   if (!rect) {
-    if (resolution.status !== ANCHOR_DETACHED) {
-      return null
-    }
-
     const cachedTop = positionCache[thread.id]
     if (Number.isFinite(cachedTop)) {
       return {
         top: cachedTop,
-        status: resolution.status || '',
-        detached: true
+        status: resolution.status || ''
       }
     }
-
-    const fallbackParagraph = Array.isArray(paragraphIndex && paragraphIndex.list) && paragraphIndex.list.length
-      ? paragraphIndex.list[0]
-      : null
-    const fallbackRect = fallbackParagraph && fallbackParagraph.element
-      ? fallbackParagraph.element.getBoundingClientRect()
-      : null
-
-    return {
-      top: fallbackRect
-        ? Math.max(0, fallbackRect.top - editorRect.top + editorContainer.scrollTop + verticalOffset)
-        : 0,
-      status: resolution.status || '',
-      detached: true
-    }
+    return null
   }
 
   return {
     top: Math.max(0, rect.top - editorRect.top + editorContainer.scrollTop + verticalOffset),
-    status: resolution.status || '',
-    detached: resolution.status === ANCHOR_DETACHED
+    status: resolution.status || ''
   }
 }
 

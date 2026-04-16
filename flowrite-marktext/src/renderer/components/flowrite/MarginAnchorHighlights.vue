@@ -5,7 +5,7 @@
 <script>
 import { mapState } from 'vuex'
 import { resolveMarginThread } from '../../../flowrite/anchors'
-import { SCOPE_MARGIN, ANCHOR_DETACHED } from '../../../flowrite/constants'
+import { SCOPE_MARGIN, ANCHOR_MISSING } from '../../../flowrite/constants'
 import {
   bindMarginViewportListeners,
   createEmptyParagraphIndex,
@@ -182,6 +182,10 @@ export default {
 
     buildThreadRanges (thread, paragraphIndex) {
       const resolution = thread.resolvedAnchor || {}
+      if (resolution.status === ANCHOR_MISSING) {
+        return []
+      }
+
       const ranges = getResolvedMarginRanges(thread)
 
       return ranges
@@ -191,7 +195,6 @@ export default {
             ? {
               key: `${thread.id}:${rangeEntry.paragraphId}:${index}`,
               threadId: thread.id,
-              detached: resolution.status === ANCHOR_DETACHED,
               clickable: this.marginThreads.some(candidate => candidate && candidate.id === thread.id),
               range
             }
@@ -245,11 +248,11 @@ export default {
       this.interactiveRanges = underlineRanges.filter(entry => entry.clickable)
       this.setNativeHighlight(
         UNDERLINE_HIGHLIGHT_NAME,
-        underlineRanges.filter(entry => !entry.detached).map(entry => entry.range)
+        underlineRanges.map(entry => entry.range)
       )
       this.setNativeHighlight(
         ACTIVE_HIGHLIGHT_NAME,
-        activeRanges.filter(entry => !entry.detached).map(entry => entry.range)
+        activeRanges.map(entry => entry.range)
       )
     },
 

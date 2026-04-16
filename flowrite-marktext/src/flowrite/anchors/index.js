@@ -1,4 +1,4 @@
-import { ANCHOR_ATTACHED, ANCHOR_DETACHED } from '../constants'
+import { ANCHOR_ATTACHED, ANCHOR_DETACHED, ANCHOR_MISSING } from '../constants'
 import { isPlainObject } from '../objectUtils'
 
 const DEFAULT_CONTEXT_RADIUS = 24
@@ -71,7 +71,9 @@ const cloneAnchorResolution = anchor => {
     : (ranges.length ? ranges[ranges.length - 1].paragraphId : paragraphId)
 
   const resolution = {
-    status: anchor.resolution.status === ANCHOR_DETACHED ? ANCHOR_DETACHED : ANCHOR_ATTACHED,
+    status: anchor.resolution.status === ANCHOR_MISSING
+      ? ANCHOR_MISSING
+      : (anchor.resolution.status === ANCHOR_DETACHED ? ANCHOR_MISSING : ANCHOR_ATTACHED),
     paragraphId: paragraphId || startParagraphId || '',
     startParagraphId,
     endParagraphId,
@@ -219,14 +221,404 @@ const isMultiParagraphResolution = resolution => {
   return Boolean(firstRange && lastRange && firstRange.paragraphId !== lastRange.paragraphId)
 }
 
-const createDetachedResolution = (anchor, reason = ANCHOR_DETACHED) => ({
-  status: ANCHOR_DETACHED,
+const createMissingResolution = (anchor, reason = ANCHOR_MISSING) => ({
+  status: ANCHOR_MISSING,
   paragraphId: anchor && anchor.start ? anchor.start.key : '',
   startOffset: anchor && anchor.start ? anchor.start.offset : 0,
   endOffset: anchor && anchor.end ? anchor.end.offset : 0,
   strategy: reason,
   score: 0
 })
+
+const createNormalizedTextIndex = text => {
+  const source = typeof text === 'string' ? text : ''
+  let normalized = ''
+  const map = []
+  let pendingWhitespaceIndex = null
+  let sawVisibleCharacter = false
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]
+    if (/\s/.test(character)) {
+      if (sawVisibleCharacter && pendingWhitespaceIndex === null) {
+        pendingWhitespaceIndex = index
+      }
+      continue
+    }
+
+    if (pendingWhitespaceIndex !== null && normalized.length) {
+      normalized += ' '
+      map.push(pendingWhitespaceIndex)
+      pendingWhitespaceIndex = null
+    }
+
+    normalized += character
+    map.push(index)
+    sawVisibleCharacter = true
+  }
+
+  return {
+    text: normalized,
+    map
+  }
+}
+
+const findLongestSurvivingFragment = (quote, normalizedText) => {
+  const normalizedQuote = normalizeString(quote)
+  const target = typeof normalizedText === 'string' ? normalizedText : ''
+
+  if (!normalizedQuote || !target) {
+    return null
+  }
+
+  for (let rawLength = normalizedQuote.length; rawLength >= 1; rawLength -= 1) {
+    const seen = new Set()
+    for (let startIndex = 0; startIndex <= normalizedQuote.length - rawLength; startIndex += 1) {
+      const fragment = normalizeString(normalizedQuote.slice(startIndex, startIndex + rawLength))
+      if (!fragment || seen.has(fragment)) {
+        continue
+      }
+      seen.add(fragment)
+
+      const matchIndex = target.indexOf(fragment)
+      if (matchIndex >= 0) {
+        return {
+          fragment,
+          startOffset: matchIndex,
+          endOffset: matchIndex + fragment.length
+        }
+      }
+    }
+  }
+
+  return null
+}
+
+const normalizedOffsetsToRawRange = (normalizedIndex, startOffset, endOffset) => {
+  if (!normalizedIndex || !Array.isArray(normalizedIndex.map) || !normalizedIndex.map.length) {
+    return null
+  }
+
+  if (!Number.isFinite(startOffset) || !Number.isFinite(endOffset) || endOffset <= startOffset) {
+    return null
+  }
+
+  const rawStartOffset = normalizedIndex.map[startOffset]
+  const rawEndOffset = normalizedIndex.map[endOffset - 1]
+
+  if (!Number.isFinite(rawStartOffset) || !Number.isFinite(rawEndOffset)) {
+    return null
+  }
+
+  return {
+    startOffset: rawStartOffset,
+    endOffset: rawEndOffset + 1
+  }
+}
+
+const findSurvivingFragmentInParagraph = (
+  anchor,
+  paragraph,
+  strategy = 'surviving_fragment',
+  {
+    sliceStart = 0,
+    sliceEnd = paragraph && typeof paragraph.text === 'string' ? paragraph.text.length : 0
+  } = {}
+) => {
+  if (!anchor || !paragraph) {
+    return null
+  }
+
+  const safeSliceStart = Math.max(0, Math.min(sliceStart, paragraph.text.length))
+  const safeSliceEnd = Math.max(safeSliceStart, Math.min(sliceEnd, paragraph.text.length))
+  const normalizedIndex = createNormalizedTextIndex(paragraph.text.slice(safeSliceStart, safeSliceEnd))
+  const fragment = findLongestSurvivingFragment(anchor.quote, normalizedIndex.text)
+  if (!fragment) {
+    return null
+  }
+
+  const rawRange = normalizedOffsetsToRawRange(normalizedIndex, fragment.startOffset, fragment.endOffset)
+  if (!rawRange) {
+    return null
+  }
+
+  return createAttachedResolution({
+    paragraphId: paragraph.id,
+    startOffset: safeSliceStart + rawRange.startOffset,
+    endOffset: safeSliceStart + rawRange.endOffset,
+    strategy,
+    score: fragment.fragment.length / Math.max(1, normalizeString(anchor.quote).length)
+  })
+}
+
+const findLocalSurvivingFragmentInParagraph = (anchor, paragraph) => {
+  if (!anchor || !paragraph) {
+    return null
+  }
+
+  const beforeContext = typeof anchor.contextBefore === 'string' ? anchor.contextBefore : ''
+  const afterContext = typeof anchor.contextAfter === 'string' ? anchor.contextAfter : ''
+  const expectedStart = Number.isFinite(anchor.start && anchor.start.offset) ? anchor.start.offset : 0
+  const expectedEnd = Number.isFinite(anchor.end && anchor.end.offset) ? anchor.end.offset : expectedStart
+  const beforeIndex = beforeContext
+    ? paragraph.text.lastIndexOf(beforeContext, expectedStart)
+    : -1
+  const afterSearchStart = beforeIndex >= 0
+    ? beforeIndex + beforeContext.length
+    : expectedStart
+  const afterIndex = afterContext
+    ? paragraph.text.indexOf(afterContext, afterSearchStart)
+    : -1
+
+  let sliceStart = beforeIndex >= 0
+    ? beforeIndex + beforeContext.length
+    : expectedStart
+  let sliceEnd = afterIndex >= 0
+    ? afterIndex
+    : expectedEnd
+
+  if (sliceEnd <= sliceStart) {
+    const radius = 4
+    sliceStart = Math.max(0, expectedStart - radius)
+    sliceEnd = Math.min(paragraph.text.length, expectedEnd + radius)
+  }
+
+  return findSurvivingFragmentInParagraph(
+    anchor,
+    paragraph,
+    'surviving_fragment_same_paragraph',
+    {
+      sliceStart,
+      sliceEnd
+    }
+  )
+}
+
+const findSurvivingFragmentInWindow = (anchor, window, strategy = 'surviving_fragment_window') => {
+  if (!anchor || !window || !Array.isArray(window.entries) || !window.entries.length) {
+    return null
+  }
+
+  const normalizedIndex = createNormalizedTextIndex(window.text)
+  const fragment = findLongestSurvivingFragment(anchor.quote, normalizedIndex.text)
+  if (!fragment) {
+    return null
+  }
+
+  const rawRange = normalizedOffsetsToRawRange(normalizedIndex, fragment.startOffset, fragment.endOffset)
+  if (!rawRange) {
+    return null
+  }
+
+  const ranges = projectWindowSelectionToRanges(window.segments || [], rawRange.startOffset, rawRange.endOffset)
+  if (!ranges.length) {
+    return null
+  }
+
+  const firstRange = ranges[0]
+  const lastRange = ranges[ranges.length - 1]
+
+  return createRangeAwareResolution({
+    paragraphId: firstRange.paragraphId,
+    startParagraphId: firstRange.paragraphId,
+    endParagraphId: lastRange.paragraphId,
+    startOffset: firstRange.startOffset,
+    endOffset: lastRange.endOffset,
+    ranges: ranges.length > 1 ? ranges : null,
+    strategy,
+    score: fragment.fragment.length / Math.max(1, normalizeString(anchor.quote).length)
+  })
+}
+
+const getNearbyParagraphCandidates = (entries, startIndex, endIndex) => {
+  if (!Array.isArray(entries) || !entries.length) {
+    return []
+  }
+
+  const hasStart = startIndex >= 0
+  const hasEnd = endIndex >= 0
+  const referenceIndexes = [startIndex, endIndex].filter(index => index >= 0)
+
+  if (!referenceIndexes.length) {
+    return entries.slice()
+  }
+
+  return entries
+    .map((paragraph, index) => ({
+      paragraph,
+      index
+    }))
+    .sort((left, right) => {
+      const leftDistance = Math.min(...referenceIndexes.map(index => Math.abs(left.index - index)))
+      const rightDistance = Math.min(...referenceIndexes.map(index => Math.abs(right.index - index)))
+
+      if (leftDistance !== rightDistance) {
+        return leftDistance - rightDistance
+      }
+
+      const leftIsEndpoint = (hasStart && left.index === startIndex) || (hasEnd && left.index === endIndex)
+      const rightIsEndpoint = (hasStart && right.index === startIndex) || (hasEnd && right.index === endIndex)
+
+      if (leftIsEndpoint !== rightIsEndpoint) {
+        return leftIsEndpoint ? -1 : 1
+      }
+
+      return left.index - right.index
+    })
+    .map(entry => entry.paragraph)
+}
+
+const getLocalParagraphWindows = (entries, startIndex, endIndex) => {
+  if (!Array.isArray(entries) || entries.length < 2) {
+    return []
+  }
+
+  const hasStart = startIndex >= 0
+  const hasEnd = endIndex >= 0
+  if (!hasStart && !hasEnd) {
+    return []
+  }
+
+  const minIndex = hasStart && hasEnd
+    ? Math.min(startIndex, endIndex)
+    : (hasStart ? startIndex : endIndex)
+  const maxIndex = hasStart && hasEnd
+    ? Math.max(startIndex, endIndex)
+    : (hasStart ? startIndex : endIndex)
+  const windows = []
+  const seen = new Set()
+
+  for (let padding = 0; padding <= 2; padding += 1) {
+    const start = Math.max(0, minIndex - padding)
+    const end = Math.min(entries.length - 1, maxIndex + padding)
+    if (end - start < 1) {
+      continue
+    }
+
+    const key = `${start}:${end}`
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    windows.push(buildParagraphWindow(entries.slice(start, end + 1)))
+  }
+
+  return windows
+}
+
+const getSequentialParagraphWindows = entries => {
+  if (!Array.isArray(entries) || entries.length < 2) {
+    return []
+  }
+
+  const windows = []
+  for (let windowSize = 2; windowSize <= Math.min(entries.length, 4); windowSize += 1) {
+    for (let startIndex = 0; startIndex <= entries.length - windowSize; startIndex += 1) {
+      windows.push(buildParagraphWindow(entries.slice(startIndex, startIndex + windowSize)))
+    }
+  }
+
+  return windows
+}
+
+const findSurvivingFragmentResolution = (anchor, entries, startIndex, endIndex) => {
+  const preferredParagraph = entries.find(entry => entry.id === anchor.start.key) || null
+  const localParagraphs = getNearbyParagraphCandidates(entries, startIndex, endIndex)
+  const localWindows = anchor.start.key !== anchor.end.key
+    ? getLocalParagraphWindows(entries, startIndex, endIndex)
+    : []
+  const sequentialWindows = anchor.start.key !== anchor.end.key
+    ? getSequentialParagraphWindows(entries)
+    : []
+
+  const paragraphScopes = []
+  if (preferredParagraph) {
+    paragraphScopes.push({
+      type: 'paragraph',
+      paragraph: preferredParagraph,
+      strategy: 'surviving_fragment_same_paragraph'
+    })
+  }
+
+  for (const paragraph of localParagraphs) {
+    if (preferredParagraph && paragraph.id === preferredParagraph.id) {
+      continue
+    }
+
+    paragraphScopes.push({
+      type: 'paragraph',
+      paragraph,
+      strategy: 'surviving_fragment_local'
+    })
+  }
+
+  const windowScopes = []
+  const seenWindowKeys = new Set()
+  const pushWindowScope = (window, strategy) => {
+    const key = Array.isArray(window && window.entries)
+      ? window.entries.map(entry => entry.id).join('|')
+      : ''
+    if (!key || seenWindowKeys.has(key)) {
+      return
+    }
+    seenWindowKeys.add(key)
+    windowScopes.push({
+      type: 'window',
+      window,
+      strategy
+    })
+  }
+
+  localWindows.forEach(window => {
+    pushWindowScope(window, 'surviving_fragment_window')
+  })
+  sequentialWindows.forEach(window => {
+    pushWindowScope(window, 'surviving_fragment_adjacent_window')
+  })
+
+  if (entries.length > 1) {
+    windowScopes.push({
+      type: 'window',
+      window: buildParagraphWindow(entries),
+      strategy: 'surviving_fragment_document'
+    })
+  }
+
+  const scopes = anchor.start.key !== anchor.end.key
+    ? [...windowScopes, ...paragraphScopes]
+    : [...paragraphScopes, ...windowScopes]
+
+  for (const scope of scopes) {
+    const resolution = scope.type === 'window'
+      ? findSurvivingFragmentInWindow(anchor, scope.window, scope.strategy)
+      : findSurvivingFragmentInParagraph(anchor, scope.paragraph, scope.strategy)
+    if (resolution) {
+      return resolution
+    }
+  }
+
+  return null
+}
+
+const getContextMatchedParagraphs = (anchor, entries) => {
+  if (!anchor || !Array.isArray(entries)) {
+    return []
+  }
+
+  const beforeContext = typeof anchor.contextBefore === 'string' ? anchor.contextBefore : ''
+  const afterContext = typeof anchor.contextAfter === 'string' ? anchor.contextAfter : ''
+
+  return entries.filter(paragraph => {
+    if (!paragraph || typeof paragraph.text !== 'string') {
+      return false
+    }
+
+    const matchesBefore = beforeContext ? paragraph.text.includes(beforeContext) : true
+    const matchesAfter = afterContext ? paragraph.text.includes(afterContext) : true
+
+    return matchesBefore && matchesAfter
+  })
+}
 
 const resolvePrimaryAnchor = (anchor, snapshot) => {
   const startIndex = snapshot.entries.findIndex(entry => entry.id === anchor.start.key)
@@ -751,12 +1143,12 @@ const findLocalSingleParagraphRecovery = (anchor, entries, startIndex, endIndex)
 export const resolveMarginAnchor = (anchor, paragraphs = []) => {
   const normalizedAnchor = cloneMarginAnchor(anchor)
   if (!normalizedAnchor || !normalizedAnchor.start || !normalizedAnchor.end || !normalizedAnchor.quote) {
-    return createDetachedResolution(normalizedAnchor, 'invalid_anchor')
+    return createMissingResolution(normalizedAnchor, 'invalid_anchor')
   }
 
   const { entries, map } = buildDocumentSnapshot(paragraphs)
   if (!entries.length) {
-    return createDetachedResolution(normalizedAnchor, 'missing_document')
+    return createMissingResolution(normalizedAnchor, 'missing_document')
   }
 
   const primaryResolution = resolvePrimaryAnchor(normalizedAnchor, { entries, map })
@@ -787,7 +1179,17 @@ export const resolveMarginAnchor = (anchor, paragraphs = []) => {
       return localSingleParagraphResolution
     }
 
-    return createDetachedResolution(normalizedAnchor)
+    const survivingFragmentResolution = findSurvivingFragmentResolution(
+      normalizedAnchor,
+      entries,
+      startIndex,
+      endIndex
+    )
+    if (survivingFragmentResolution) {
+      return survivingFragmentResolution
+    }
+
+    return createMissingResolution(normalizedAnchor)
   }
 
   const preferredParagraph = map.get(normalizedAnchor.start.key)
@@ -809,7 +1211,16 @@ export const resolveMarginAnchor = (anchor, paragraphs = []) => {
     if (fuzzyInPrimary) {
       return fuzzyInPrimary
     }
+
+    const survivingFragmentInPrimary = findLocalSurvivingFragmentInParagraph(normalizedAnchor, preferredParagraph)
+    if (survivingFragmentInPrimary) {
+      return survivingFragmentInPrimary
+    }
   }
+
+  const contextMatchedParagraphs = preferredParagraph
+    ? []
+    : getContextMatchedParagraphs(normalizedAnchor, entries)
 
   for (const paragraph of entries) {
     if (preferredParagraph && paragraph.id === preferredParagraph.id) {
@@ -838,7 +1249,16 @@ export const resolveMarginAnchor = (anchor, paragraphs = []) => {
     }
   }
 
-  return createDetachedResolution(normalizedAnchor)
+  if (!preferredParagraph) {
+    for (const paragraph of contextMatchedParagraphs) {
+      const survivingFragmentResolution = findLocalSurvivingFragmentInParagraph(normalizedAnchor, paragraph)
+      if (survivingFragmentResolution) {
+        return survivingFragmentResolution
+      }
+    }
+  }
+
+  return createMissingResolution(normalizedAnchor)
 }
 
 export const resolveMarginThread = (thread, paragraphs = []) => {

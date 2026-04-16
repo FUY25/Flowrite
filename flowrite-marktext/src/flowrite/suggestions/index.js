@@ -1,5 +1,5 @@
 import { cloneMarginAnchor, resolveMarginAnchor } from '../anchors'
-import { ANCHOR_DETACHED } from '../constants'
+import { ANCHOR_DETACHED, ANCHOR_MISSING } from '../constants'
 
 const normalizeString = value => {
   return typeof value === 'string'
@@ -81,7 +81,7 @@ export const resolveSuggestionTarget = (markdown, suggestion) => {
 
   const paragraphs = parseMarkdownParagraphs(safeMarkdown)
   const resolvedAnchor = resolveMarginAnchor(suggestion.anchor, paragraphs)
-  if (!resolvedAnchor || resolvedAnchor.status === ANCHOR_DETACHED) {
+  if (!resolvedAnchor || resolvedAnchor.status === ANCHOR_DETACHED || resolvedAnchor.status === ANCHOR_MISSING) {
     return null
   }
 
