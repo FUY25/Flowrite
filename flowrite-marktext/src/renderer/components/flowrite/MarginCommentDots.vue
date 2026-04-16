@@ -9,10 +9,7 @@
       :key="thread.id"
       type="button"
       class="flowrite-margin-dot"
-      :class="[
-        { 'is-active': isActive(thread.id) },
-        { 'is-detached': isDetached(thread) }
-      ]"
+      :class="{ 'is-active': isActive(thread.id) }"
       :style="{
         top: `${thread.dotTop}px`
       }"
@@ -141,8 +138,7 @@ export default {
 
           return {
             ...resolvedThread,
-            dotTop: position.top,
-            isDetached: position.detached
+            dotTop: position.top
           }
         })
         .filter(Boolean)
@@ -182,10 +178,6 @@ export default {
 
     isActive (threadId) {
       return this.activeMarginThreadId === threadId
-    },
-
-    isDetached (thread) {
-      return Boolean(thread && thread.isDetached)
     },
 
     dotLabel (thread) {
@@ -244,9 +236,5 @@ export default {
 
   .flowrite-margin-dot.is-active .flowrite-margin-dot__core {
     background: rgba(210, 153, 51, 0.96);
-  }
-
-  .flowrite-margin-dot.is-detached {
-    opacity: 0.72;
   }
 </style>

@@ -81,10 +81,10 @@ const replaceParagraphText = async (page, targetText, replacementText) => {
   })
 }
 
-test.describe('Flowrite detached margin comments', () => {
-  test('renders quiet dots for detached margin threads', async () => {
+test.describe('Flowrite resilient margin comments', () => {
+  test('keeps a margin thread visible when one original anchored letter survives', async () => {
     test.setTimeout(60000)
-    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-detached-dot-'))
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-surviving-letter-'))
     const userDataDir = path.join(tempRoot, 'user-data')
     const articlePath = path.join(tempRoot, 'draft.md')
     const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
@@ -156,11 +156,16 @@ test.describe('Flowrite detached margin comments', () => {
         })
       })
 
-      const dot = page.locator('[data-testid="flowrite-margin-dot"]').first()
-      await expect(dot).toBeVisible()
+      const thread = page.locator('[data-testid="flowrite-margin-thread"]').first()
+      await expect(thread).toContainText('Keep track of this thought.')
+      await expect(thread.locator('[data-testid="flowrite-margin-thread-status"]')).toContainText('Attached')
 
-      const dotBoxShadow = await dot.evaluate(node => window.getComputedStyle(node).boxShadow)
-      expect(dotBoxShadow === 'none' || dotBoxShadow === '').toBeTruthy()
+      await replaceParagraphText(page, 'reflective paragraph', 'xxqz jynm wobus r')
+      await page.waitForTimeout(1000)
+
+      await expect(thread).toBeVisible()
+      await expect(thread).not.toContainText('Detached')
+      await expect(thread.locator('[data-testid="flowrite-margin-thread-status"]')).toContainText('Attached')
     } finally {
       try {
         await closeElectron(app)
@@ -169,9 +174,9 @@ test.describe('Flowrite detached margin comments', () => {
     }
   })
 
-  test('marks a margin thread detached after a destructive rewrite removes the anchored quote', async () => {
+  test('hides a margin thread from the UI when none of the original anchored text survives', async () => {
     test.setTimeout(60000)
-    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-detached-'))
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'flowrite-margin-comments-hidden-missing-anchor-'))
     const userDataDir = path.join(tempRoot, 'user-data')
     const articlePath = path.join(tempRoot, 'draft.md')
     const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
@@ -231,15 +236,11 @@ test.describe('Flowrite detached margin comments', () => {
       await expect(thread).toContainText('Keep track of this thought.')
       await expect(thread.locator('[data-testid="flowrite-margin-thread-status"]')).toContainText('Attached')
 
-      await replaceParagraphText(page, 'reflective paragraph', 'An abrupt closing line about thunder and gravel.')
+      await replaceParagraphText(page, 'reflective paragraph', 'xxqz jynm wobus')
       await page.waitForTimeout(1000)
 
-      await expect(thread.locator('[data-testid="flowrite-margin-thread-status"]')).toContainText('Detached')
-
-      await page.mouse.move(220, 6)
-      await page.waitForTimeout(150)
-      await page.locator('[data-testid="flowrite-annotations-toggle"]').click()
       await expect(thread).toBeHidden()
+      await expect(page.locator('[data-testid="flowrite-margin-dot"]')).toHaveCount(0)
     } finally {
       try {
         await closeElectron(app)

@@ -66,3 +66,4 @@ export const PERSONA_IMPROVEMENT = 'improvement'
 // Anchor resolution statuses
 export const ANCHOR_ATTACHED = 'attached'
 export const ANCHOR_DETACHED = 'detached'
+export const ANCHOR_MISSING = 'missing'

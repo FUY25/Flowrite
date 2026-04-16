@@ -2,6 +2,7 @@ import BaseFloat from '../baseFloat'
 import icons from './config'
 import selection from '../../selection'
 import quoteIcon from '../../assets/pngicon/quote_block/2.png'
+import { buildFlowriteSelectionPayload } from '../flowriteSelectionPayload'
 
 import './index.css'
 
@@ -55,42 +56,14 @@ class FormatPicker extends BaseFloat {
     const selectedQuote = typeof window.getSelection === 'function'
       ? window.getSelection().toString()
       : ''
-    const quote = typeof selectedQuote === 'string' ? selectedQuote.replace(/\s+/g, ' ').trim() : ''
+    const getBlock = key => this.muya.contentState.getBlock(key)
 
-    if (!range || range.collapsed || !cursor.start || !cursor.end || !quote) {
-      return null
-    }
-
-    const rect = range.getBoundingClientRect()
-    if (!rect || (!rect.width && !rect.height)) {
-      return null
-    }
-
-    const startBlock = this.muya.contentState.getBlock(cursor.start.key)
-    const endBlock = this.muya.contentState.getBlock(cursor.end.key)
-
-    return {
-      quote,
-      rect: {
-        top: rect.top,
-        left: rect.left,
-        right: rect.right,
-        bottom: rect.bottom,
-        width: rect.width,
-        height: rect.height
-      },
-      start: {
-        key: cursor.start.key,
-        offset: cursor.start.offset,
-        blockText: startBlock && typeof startBlock.text === 'string' ? startBlock.text : ''
-      },
-      end: {
-        key: cursor.end.key,
-        offset: cursor.end.offset,
-        blockText: endBlock && typeof endBlock.text === 'string' ? endBlock.text : ''
-      },
-      sameBlock: cursor.start.key === cursor.end.key
-    }
+    return buildFlowriteSelectionPayload({
+      range,
+      cursor,
+      selectedQuote,
+      getBlock
+    })
   }
 
   getToolRows () {

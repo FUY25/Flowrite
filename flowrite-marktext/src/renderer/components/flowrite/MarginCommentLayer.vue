@@ -202,8 +202,7 @@ export default {
             active: this.activeMarginThreadId === resolvedThread.id,
             naturalTop: position.top,
             messageCount: Array.isArray(resolvedThread.comments) ? resolvedThread.comments.length : 0,
-            height: this.threadHeights[thread.id] || this.estimateThreadHeight(resolvedThread),
-            isDetached: position.detached
+            height: this.threadHeights[thread.id] || this.estimateThreadHeight(resolvedThread)
           }
         })
         .filter(Boolean)
@@ -220,7 +219,6 @@ export default {
             naturalTop: composerPosition.top,
             messageCount: 0,
             height: this.threadHeights[FLOWRITE_MARGIN_THREAD_COMPOSER_ID] || this.estimateThreadHeight(resolvedComposer),
-            isDetached: false,
             isComposer: true
           })
         }

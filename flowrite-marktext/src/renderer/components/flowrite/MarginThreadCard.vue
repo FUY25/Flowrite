@@ -5,8 +5,7 @@
     :class="[
       {
         'is-active': active || composer,
-        'is-composer': composer,
-        'is-detached': isDetached
+        'is-composer': composer
       },
       { 'is-static': !positioned }
     ]"
@@ -15,19 +14,12 @@
     @click="handleCardClick"
   >
     <div class="flowrite-margin-thread-card__surface">
-      <div
-        v-if="isDetached && !composer"
-        class="flowrite-margin-thread-card__detached"
-      >
-        Detached
-      </div>
-
       <div class="flowrite-margin-thread-card__meta flowrite-margin-thread-card__meta--sr-only">
         <span
           class="flowrite-margin-thread-card__status"
           data-testid="flowrite-margin-thread-status"
         >
-          {{ isDetached ? 'Detached' : 'Attached' }}
+          Attached
         </span>
       </div>
 
@@ -132,7 +124,6 @@
 </template>
 
 <script>
-import { ANCHOR_DETACHED } from '../../../flowrite/constants'
 import {
   FLOWRITE_MARGIN_THREAD_COMPOSER_ID,
   formatFlowriteTimestamp,
@@ -182,18 +173,6 @@ export default {
   computed: {
     composerThreadId () {
       return FLOWRITE_MARGIN_THREAD_COMPOSER_ID
-    },
-
-    isDetached () {
-      if (this.composer) {
-        return false
-      }
-
-      return Boolean(
-        this.thread &&
-        this.thread.resolvedAnchor &&
-        this.thread.resolvedAnchor.status === ANCHOR_DETACHED
-      )
     },
 
     comments () {
@@ -493,28 +472,11 @@ export default {
     box-shadow: 0 12px 26px rgba(26, 33, 44, 0.08);
   }
 
-  .flowrite-margin-thread-card.is-detached .flowrite-margin-thread-card__surface {
-    border-style: dashed;
-  }
-
   .flowrite-margin-thread-card__meta,
   .flowrite-margin-thread-card__comment-meta {
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-
-  .flowrite-margin-thread-card__detached {
-    position: absolute;
-    top: 12px;
-    right: 14px;
-    border-radius: 999px;
-    background: rgba(242, 244, 247, 0.98);
-    color: rgba(108, 121, 139, 0.92);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
-    padding: 5px 8px;
   }
 
   .flowrite-margin-thread-card__meta {

@@ -1,5 +1,6 @@
 import BaseFloat from '../baseFloat'
 import selection from '../../selection'
+import { buildFlowriteSelectionPayload } from '../flowriteSelectionPayload'
 
 import './index.css'
 
@@ -55,57 +56,25 @@ class FlowriteSelectionMenu extends BaseFloat {
     const selectedQuote = typeof window.getSelection === 'function'
       ? window.getSelection().toString()
       : ''
-    const quote = typeof selectedQuote === 'string' ? selectedQuote.replace(/\s+/g, ' ').trim() : ''
-    const isCollapsed = !changes || !changes.start || !changes.end || (
-      changes.start.key === changes.end.key && changes.start.offset === changes.end.offset
-    )
+    const cursor = selection.getCursorRange()
+    const getBlock = key => this.muya && this.muya.contentState && typeof this.muya.contentState.getBlock === 'function'
+      ? this.muya.contentState.getBlock(key)
+      : null
 
-    if (isCollapsed || !range || range.collapsed || !quote) {
-      this.currentSelection = null
+    this.currentSelection = buildFlowriteSelectionPayload({
+      range,
+      cursor,
+      selectedQuote,
+      getBlock,
+      requireSingleParagraph: true
+    })
+
+    if (!this.currentSelection) {
       this.hide()
       return
     }
 
-    if (changes.start.key !== changes.end.key) {
-      this.currentSelection = null
-      this.hide()
-      return
-    }
-
-    const rect = range.getBoundingClientRect()
-    if (!rect || (!rect.width && !rect.height)) {
-      this.currentSelection = null
-      this.hide()
-      return
-    }
-
-    this.currentSelection = {
-      quote,
-      rect: {
-        top: rect.top,
-        left: rect.left,
-        right: rect.right,
-        bottom: rect.bottom,
-        width: rect.width,
-        height: rect.height
-      },
-      start: {
-        key: changes.start.key,
-        offset: changes.start.offset,
-        blockText: changes.start.block && typeof changes.start.block.text === 'string'
-          ? changes.start.block.text
-          : ''
-      },
-      end: {
-        key: changes.end.key,
-        offset: changes.end.offset,
-        blockText: changes.end.block && typeof changes.end.block.text === 'string'
-          ? changes.end.block.text
-          : ''
-      }
-    }
-
-    this.show(createReference(rect))
+    this.show(createReference(this.currentSelection.rect))
   }
 
   handleClick = event => {
