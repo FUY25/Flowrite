@@ -8,6 +8,10 @@ import { isMarkdownFile } from 'common/filesystem/paths'
 import { normalizeAndResolvePath } from '../filesystem'
 import { createSidecarSaveTransaction, loadDocumentRecord, saveDocumentRecord } from '../flowrite/files/documentStore'
 import { saveComments } from '../flowrite/files/commentsStore'
+import {
+  ensureDocumentIdentityInMarkdown,
+  extractDocumentIdentityFromMarkdown
+} from '../flowrite/files/documentIdentity'
 import { saveSuggestions } from '../flowrite/files/suggestionsStore'
 import { ensureSnapshotForAcceptedSuggestion } from '../flowrite/files/snapshotStore'
 import { convertLineEndings } from './lineEndings'
@@ -44,9 +48,16 @@ export const normalizeMarkdownPath = pathname => {
 export const writeMarkdownFile = (pathname, content, options, saveContext = {}) => {
   const { adjustLineEndingOnSave, lineEnding } = options
   const { encoding, isBom } = options.encoding
+  const flowriteDocumentId = saveContext.flowrite &&
+    saveContext.flowrite.document &&
+    saveContext.flowrite.document.documentId
 
   if (adjustLineEndingOnSave) {
     content = convertLineEndings(content, lineEnding)
+  }
+
+  if (flowriteDocumentId) {
+    content = ensureDocumentIdentityInMarkdown(content, flowriteDocumentId, lineEnding)
   }
 
   const buffer = iconv.encode(content, encoding, { addBOM: isBom })
@@ -167,6 +178,9 @@ export const loadMarkdownFile = async (pathname, preferredEol, autoGuessEncoding
     markdown = convertLineEndings(markdown, 'lf')
   }
 
+  const identity = extractDocumentIdentityFromMarkdown(markdown)
+  markdown = identity.markdown
+
   // Detect final newline
   if (trimTrailingNewline === 2) {
     if (!markdown) {
@@ -193,6 +207,8 @@ export const loadMarkdownFile = async (pathname, preferredEol, autoGuessEncoding
     markdown,
     filename,
     pathname,
+    flowriteDocumentId: identity.documentId,
+    flowriteDocumentIdCarrier: identity.carrier,
 
     // options
     encoding,

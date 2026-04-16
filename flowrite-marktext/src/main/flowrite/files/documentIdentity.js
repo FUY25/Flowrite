@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 
-const DOCUMENT_ID_COMMENT_REG = /^<!--\s*flowrite:id=([0-9a-z-]+)\s*-->\n{0,2}/i
+const DOCUMENT_ID_COMMENT_REG = /^<!--\s*flowrite:id=([0-9a-z-]+)\s*-->(?:\r?\n){0,2}/i
 
 export const createDocumentId = () => crypto.randomUUID()
 
@@ -23,8 +23,9 @@ export const extractDocumentIdentityFromMarkdown = markdown => {
   }
 }
 
-export const ensureDocumentIdentityInMarkdown = (markdown, documentId) => {
+export const ensureDocumentIdentityInMarkdown = (markdown, documentId, lineEnding = 'lf') => {
   const source = typeof markdown === 'string' ? markdown : ''
   const cleaned = source.replace(DOCUMENT_ID_COMMENT_REG, '')
-  return `<!-- flowrite:id=${documentId} -->\n\n${cleaned}`
+  const eol = lineEnding && lineEnding.toLowerCase() === 'crlf' ? '\r\n' : '\n'
+  return `<!-- flowrite:id=${documentId} -->${eol}${eol}${cleaned}`
 }

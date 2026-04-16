@@ -2,7 +2,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs-extra'
 import { expect } from 'chai'
-import { writeMarkdownFile } from '../../../src/main/filesystem/markdown'
+import { loadMarkdownFile, writeMarkdownFile } from '../../../src/main/filesystem/markdown'
 import {
   getSidecarPaths
 } from '../../../src/main/flowrite/files/sidecarPaths'
@@ -909,5 +909,49 @@ describe('Flowrite sidecar storage', function () {
     expect(error).to.equal(null)
     expect(await fs.readFile(pathname, 'utf8')).to.equal('after\n')
     expect(await getCommentBodies(pathname)).to.deep.equal(['New comment'])
+  })
+
+  it('strips the flowrite id comment before the markdown reaches editor state', async function () {
+    const pathname = path.join(tempRoot, 'identity-load.md')
+    await fs.ensureDir(path.dirname(pathname))
+    await fs.writeFile(pathname, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+
+    const rawDocument = await loadMarkdownFile(pathname, 'lf', true, 2)
+
+    expect(rawDocument.markdown).to.equal('# Draft\n')
+    expect(rawDocument.flowriteDocumentId).to.equal('doc-123')
+    expect(rawDocument.flowriteDocumentIdCarrier).to.equal('html_comment')
+  })
+
+  it('re-injects the flowrite id comment during save when saveContext carries documentId', async function () {
+    const pathname = path.join(tempRoot, 'identity-save.md')
+
+    await writeMarkdownFile(pathname, '# Draft\n', markdownOptions, {
+      flowrite: {
+        document: {
+          documentId: 'doc-123'
+        }
+      }
+    })
+
+    expect(await fs.readFile(pathname, 'utf8')).to.equal('<!-- flowrite:id=doc-123 -->\n\n# Draft\n')
+  })
+
+  it('re-injects the flowrite id comment using CRLF when the target line ending is crlf', async function () {
+    const pathname = path.join(tempRoot, 'identity-save-crlf.md')
+
+    await writeMarkdownFile(pathname, '# Draft\n', {
+      ...markdownOptions,
+      adjustLineEndingOnSave: true,
+      lineEnding: 'crlf'
+    }, {
+      flowrite: {
+        document: {
+          documentId: 'doc-123'
+        }
+      }
+    })
+
+    expect(await fs.readFile(pathname, 'utf8')).to.equal('<!-- flowrite:id=doc-123 -->\r\n\r\n# Draft\r\n')
   })
 })

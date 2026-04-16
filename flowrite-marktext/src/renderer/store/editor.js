@@ -16,6 +16,15 @@ import {
 
 const autoSaveTimers = new Map()
 
+const getFlowriteSaveState = file => ({
+  flowrite: {
+    document: {
+      documentId: file.flowriteDocumentId,
+      documentIdCarrier: file.flowriteDocumentIdCarrier
+    }
+  }
+})
+
 const state = {
   currentFile: {},
   tabs: [],
@@ -107,12 +116,21 @@ const mutations = {
       trimTrailingNewline,
       encoding,
       markdown,
-      filename
+      filename,
+      flowriteDocumentId,
+      flowriteDocumentIdCarrier
     } = data
     const options = { encoding, lineEnding, adjustLineEndingOnSave, trimTrailingNewline }
 
     // Create a new document and update few entires later.
-    const newFileState = getSingleFileState({ markdown, filename, pathname, options })
+    const newFileState = getSingleFileState({
+      markdown,
+      filename,
+      pathname,
+      options,
+      flowriteDocumentId,
+      flowriteDocumentIdCarrier
+    })
 
     const tab = tabs.find(t => isSamePathSync(t.pathname, pathname))
     if (!tab) {
@@ -408,7 +426,14 @@ const actions = {
     const options = getOptionsFromState(file)
 
     // Save the file content via main process and send a close tab response.
-    ipcRenderer.send('mt::save-and-close-tabs', [{ id, pathname, filename, markdown, options }])
+    ipcRenderer.send('mt::save-and-close-tabs', [{
+      id,
+      pathname,
+      filename,
+      markdown,
+      options,
+      ...getFlowriteSaveState(file)
+    }])
   },
 
   // need pass some data to main process when `save` menu item clicked
@@ -424,7 +449,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          ...getFlowriteSaveState(state.currentFile)
         })
       }
     })
@@ -443,7 +469,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          ...getFlowriteSaveState(state.currentFile)
         })
       }
     })
@@ -506,7 +533,14 @@ const actions = {
         .map(file => {
           const { id, filename, pathname, markdown } = file
           const options = getOptionsFromState(file)
-          return { id, filename, pathname, markdown, options }
+          return {
+            id,
+            filename,
+            pathname,
+            markdown,
+            options,
+            ...getFlowriteSaveState(file)
+          }
         })
 
       if (unsavedFiles.length) {
@@ -532,7 +566,14 @@ const actions = {
       .map(file => {
         const { id, filename, pathname, markdown } = file
         const options = getOptionsFromState(file)
-        return { id, filename, pathname, markdown, options }
+        return {
+          id,
+          filename,
+          pathname,
+          markdown,
+          options,
+          ...getFlowriteSaveState(file)
+        }
       })
 
     if (closeTabs) {
@@ -561,7 +602,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          ...getFlowriteSaveState(state.currentFile)
         })
       } else {
         // if not, move to a new(maybe) folder
@@ -589,7 +631,8 @@ const actions = {
         pathname,
         markdown,
         options,
-        defaultPath
+        defaultPath,
+        ...getFlowriteSaveState(state.currentFile)
       })
     } else {
       bus.$emit('rename')
@@ -988,7 +1031,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          ...getFlowriteSaveState(tab)
         })
       }
     }, autoSaveDelay)
