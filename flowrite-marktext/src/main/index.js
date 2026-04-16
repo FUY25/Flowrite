@@ -9,12 +9,18 @@ import App from './app'
 import Accessor from './app/accessor'
 import setupEnvironment from './app/env'
 import { getLogLevel } from './utils'
-import { createBrokenPipeSafeTransport } from './utils/safeConsoleTransport'
+import {
+  createBrokenPipeSafeTransport,
+  installBrokenPipeStreamGuards
+} from './utils/safeConsoleTransport'
 
 const initializeLogger = appEnvironment => {
   const consoleTransport = createBrokenPipeSafeTransport(log.transports.console)
   consoleTransport.level = process.env.NODE_ENV === 'development' ? 'info' : 'error'
   log.transports.console = consoleTransport
+  installBrokenPipeStreamGuards(process, () => {
+    consoleTransport.level = false
+  })
   log.transports.rendererConsole = null
   log.transports.file.resolvePath = () => path.join(appEnvironment.paths.logPath, 'main.log')
   log.transports.file.level = getLogLevel()

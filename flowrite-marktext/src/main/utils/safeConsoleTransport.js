@@ -47,3 +47,30 @@ export const createBrokenPipeSafeTransport = transport => {
     }
   })
 }
+
+export const installBrokenPipeStreamGuards = (processLike, onBrokenPipe = () => {}) => {
+  if (!processLike || processLike.__flowriteBrokenPipeGuardsInstalled) {
+    return processLike
+  }
+
+  let brokenPipeDetected = false
+
+  const handleStreamError = error => {
+    if (!isBrokenPipeError(error) || brokenPipeDetected) {
+      return
+    }
+
+    brokenPipeDetected = true
+    onBrokenPipe(error)
+  }
+
+  for (const streamName of ['stdout', 'stderr']) {
+    const stream = processLike[streamName]
+    if (stream && typeof stream.on === 'function') {
+      stream.on('error', handleStreamError)
+    }
+  }
+
+  processLike.__flowriteBrokenPipeGuardsInstalled = true
+  return processLike
+}

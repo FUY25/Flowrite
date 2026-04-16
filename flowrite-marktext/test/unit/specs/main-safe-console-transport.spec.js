@@ -1,6 +1,7 @@
 import { expect } from 'chai'
 import {
   createBrokenPipeSafeTransport,
+  installBrokenPipeStreamGuards,
   isBrokenPipeError
 } from '../../../src/main/utils/safeConsoleTransport'
 
@@ -47,5 +48,54 @@ describe('Main safe console transport', function () {
     expect(isBrokenPipeError({ code: 'EPIPE' })).to.equal(true)
     expect(isBrokenPipeError(new Error('write EPIPE'))).to.equal(true)
     expect(isBrokenPipeError(new Error('different failure'))).to.equal(false)
+  })
+
+  it('installs stdout and stderr guards that notify only once for broken pipes', function () {
+    const listeners = {}
+    const processLike = {
+      stdout: {
+        on (event, handler) {
+          listeners[`stdout:${event}`] = handler
+        }
+      },
+      stderr: {
+        on (event, handler) {
+          listeners[`stderr:${event}`] = handler
+        }
+      }
+    }
+
+    let notificationCount = 0
+    installBrokenPipeStreamGuards(processLike, () => {
+      notificationCount += 1
+    })
+
+    const error = new Error('write EPIPE')
+    error.code = 'EPIPE'
+    listeners['stdout:error'](error)
+    listeners['stderr:error'](error)
+
+    expect(notificationCount).to.equal(1)
+    expect(processLike.__flowriteBrokenPipeGuardsInstalled).to.equal(true)
+  })
+
+  it('ignores non-broken-pipe stream errors', function () {
+    const listeners = {}
+    const processLike = {
+      stdout: {
+        on (event, handler) {
+          listeners[`stdout:${event}`] = handler
+        }
+      }
+    }
+
+    let notificationCount = 0
+    installBrokenPipeStreamGuards(processLike, () => {
+      notificationCount += 1
+    })
+
+    listeners['stdout:error'](new Error('different failure'))
+
+    expect(notificationCount).to.equal(0)
   })
 })

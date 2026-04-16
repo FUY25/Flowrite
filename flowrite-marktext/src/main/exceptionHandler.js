@@ -109,6 +109,9 @@ Operating system: ${getOSInformation()}`)
 const setupExceptionHandler = () => {
   // main process error handler
   process.on('uncaughtException', error => {
+    if (isBrokenPipeError(error)) {
+      return
+    }
     handleError(ERROR_MSG_MAIN, error, 'main')
   })
 
