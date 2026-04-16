@@ -25,7 +25,8 @@
 </template>
 
 <script>
-import { SCOPE_MARGIN } from '../../../flowrite/constants'
+import { SCOPE_MARGIN, AUTHOR_USER } from '../../../flowrite/constants'
+import { FLOWRITE_MARGIN_THREAD_COMPOSER_ID } from '../../../flowrite/commentUi'
 import MarginThreadCard from './MarginThreadCard.vue'
 
 export default {
@@ -68,7 +69,7 @@ export default {
 
       return this.sourceAnchor
         ? {
-          id: 'flowrite-margin-thread-composer',
+          id: FLOWRITE_MARGIN_THREAD_COMPOSER_ID,
           scope: SCOPE_MARGIN,
           anchor: this.sourceAnchor,
           comments: [],
@@ -136,7 +137,7 @@ export default {
         thread.scope === SCOPE_MARGIN &&
         this.anchorsMatch(thread.anchor, this.sourceAnchor) &&
         Array.isArray(thread.comments) &&
-        thread.comments.some(comment => comment && comment.author === 'user')
+        thread.comments.some(comment => comment && comment.author === AUTHOR_USER)
       ))
     },
 

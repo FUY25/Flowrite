@@ -9,8 +9,10 @@ import {
   PHASE_IDLE,
   PHASE_BOOTSTRAP,
   PHASE_AI_REVIEW,
-  SCOPE_MARGIN
+  SCOPE_MARGIN,
+  PERSONA_FRIENDLY
 } from '../../../flowrite/constants'
+import { FLOWRITE_MARGIN_THREAD_COMPOSER_ID } from '../../../flowrite/commentUi'
 
 const cloneArray = value => {
   return Array.isArray(value) ? value.slice() : []
@@ -401,7 +403,7 @@ const actions = {
     const pathname = currentFile.pathname || ''
     const reviewPersona = typeof payload === 'string'
       ? payload
-      : (payload.reviewPersona || 'friendly')
+      : (payload.reviewPersona || PERSONA_FRIENDLY)
     const prompt = typeof payload === 'string'
       ? ''
       : (payload.prompt || '')
@@ -567,7 +569,7 @@ const actions = {
 
     const now = new Date().toISOString()
     const composerMarginThread = {
-      id: 'flowrite-margin-thread-composer',
+      id: FLOWRITE_MARGIN_THREAD_COMPOSER_ID,
       scope: SCOPE_MARGIN,
       status: 'draft',
       createdAt: now,

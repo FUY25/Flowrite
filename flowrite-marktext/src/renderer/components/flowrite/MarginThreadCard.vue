@@ -10,7 +10,7 @@
       },
       { 'is-static': !positioned }
     ]"
-    :data-thread-id="thread ? thread.id : 'flowrite-margin-thread-composer'"
+    :data-thread-id="thread ? thread.id : composerThreadId"
     :data-testid="composer ? null : 'flowrite-margin-thread'"
     @click="handleCardClick"
   >
@@ -51,12 +51,12 @@
             :class="`author-${comment.author}`"
           >
             <div class="flowrite-margin-thread-card__avatar">
-              {{ comment.author === 'user' ? 'Y' : 'F' }}
+              {{ commentAvatar(comment) }}
             </div>
             <div class="flowrite-margin-thread-card__copy">
               <div class="flowrite-margin-thread-card__comment-meta">
                 <span class="flowrite-margin-thread-card__author">
-                  {{ comment.author === 'user' ? 'You' : 'Flowrite' }}
+                  {{ commentAuthor(comment) }}
                 </span>
                 <span class="flowrite-margin-thread-card__comment-time">
                   {{ formatTimestamp(comment.createdAt) }}
@@ -133,6 +133,12 @@
 
 <script>
 import { ANCHOR_DETACHED } from '../../../flowrite/constants'
+import {
+  FLOWRITE_MARGIN_THREAD_COMPOSER_ID,
+  formatFlowriteTimestamp,
+  getFlowriteCommentAuthorLabel,
+  getFlowriteCommentAvatar
+} from '../../../flowrite/commentUi'
 
 export default {
   props: {
@@ -174,6 +180,10 @@ export default {
     }
   },
   computed: {
+    composerThreadId () {
+      return FLOWRITE_MARGIN_THREAD_COMPOSER_ID
+    },
+
     isDetached () {
       if (this.composer) {
         return false
@@ -438,20 +448,16 @@ export default {
       })
     },
 
+    commentAuthor (comment) {
+      return getFlowriteCommentAuthorLabel(comment)
+    },
+
+    commentAvatar (comment) {
+      return getFlowriteCommentAvatar(comment)
+    },
+
     formatTimestamp (value) {
-      if (!value) {
-        return 'Now'
-      }
-
-      const date = new Date(value)
-      if (Number.isNaN(date.getTime())) {
-        return 'Now'
-      }
-
-      return date.toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit'
-      })
+      return formatFlowriteTimestamp(value)
     }
   }
 }

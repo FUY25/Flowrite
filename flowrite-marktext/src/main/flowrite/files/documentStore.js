@@ -3,6 +3,7 @@ import fs from 'fs-extra'
 import log from 'electron-log'
 import { getSidecarPaths } from './sidecarPaths'
 import { resolveMarkdownFilePath } from '../../filesystem/markdownPaths'
+import { isPlainObject } from '../../../flowrite/objectUtils'
 
 const DOCUMENT_VERSION = 1
 
@@ -13,10 +14,6 @@ export const DEFAULT_DOCUMENT_RECORD = {
   historyTokenEstimate: 0,
   responseStyle: 'comment_only',
   lastReviewPersona: 'improvement'
-}
-
-const isPlainObject = value => {
-  return value != null && typeof value === 'object' && !Array.isArray(value)
 }
 
 const getTempFilePath = pathname => {

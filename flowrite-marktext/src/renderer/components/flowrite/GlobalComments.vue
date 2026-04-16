@@ -100,17 +100,22 @@
 import { mapState } from 'vuex'
 import {
   SCOPE_GLOBAL,
-  AUTHOR_USER,
   RUNTIME_STATUS_RUNNING,
   RUNTIME_STATUS_FAILED
 } from '../../../flowrite/constants'
+import {
+  formatFlowriteTimestamp,
+  getFlowriteCommentAuthorLabel,
+  getFlowriteCommentAvatar
+} from '../../../flowrite/commentUi'
 
 export default {
   data () {
     return {
       draft: '',
       submitError: '',
-      isRevealActive: false
+      isRevealActive: false,
+      revealListenerAttached: false
     }
   },
 
@@ -208,6 +213,7 @@ export default {
     },
 
     distractionFreeWriting (value) {
+      this.syncRevealListener()
       if (!value) {
         this.isRevealActive = false
       }
@@ -215,36 +221,51 @@ export default {
   },
 
   mounted () {
-    document.addEventListener('mousemove', this.handleDocumentMouseMove, true)
+    this.syncRevealListener()
   },
 
   beforeDestroy () {
-    document.removeEventListener('mousemove', this.handleDocumentMouseMove, true)
+    this.removeRevealListener()
   },
 
   methods: {
+    addRevealListener () {
+      if (typeof document === 'undefined' || this.revealListenerAttached) {
+        return
+      }
+
+      document.addEventListener('mousemove', this.handleDocumentMouseMove, true)
+      this.revealListenerAttached = true
+    },
+
+    removeRevealListener () {
+      if (typeof document === 'undefined' || !this.revealListenerAttached) {
+        return
+      }
+
+      document.removeEventListener('mousemove', this.handleDocumentMouseMove, true)
+      this.revealListenerAttached = false
+    },
+
+    syncRevealListener () {
+      if (this.distractionFreeWriting) {
+        this.addRevealListener()
+        return
+      }
+
+      this.removeRevealListener()
+    },
+
     commentAuthor (comment) {
-      return comment && comment.author === AUTHOR_USER ? 'You' : 'Flowrite'
+      return getFlowriteCommentAuthorLabel(comment)
     },
 
     commentAvatar (comment) {
-      return comment && comment.author === AUTHOR_USER ? 'Y' : 'F'
+      return getFlowriteCommentAvatar(comment)
     },
 
     formatTimestamp (value) {
-      if (!value) {
-        return 'Now'
-      }
-
-      const date = new Date(value)
-      if (Number.isNaN(date.getTime())) {
-        return 'Now'
-      }
-
-      return date.toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit'
-      })
+      return formatFlowriteTimestamp(value)
     },
 
     async submitComment () {

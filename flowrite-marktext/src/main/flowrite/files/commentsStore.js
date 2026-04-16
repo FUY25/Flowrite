@@ -2,6 +2,7 @@ import { getSidecarPaths } from './sidecarPaths'
 import { loadJsonSidecar, quarantineCorruptJson, writeJsonSidecar } from './documentStore'
 import { loadSuggestions, saveSuggestions } from './suggestionsStore'
 import { cloneMarginAnchor } from '../../../flowrite/anchors'
+import { isPlainObject } from '../../../flowrite/objectUtils'
 import {
   FLOWRITE_GLOBAL_THREAD_ID,
   FLOWRITE_THREAD_MODE_COMMENTING,
@@ -15,8 +16,6 @@ import {
 } from '../../../flowrite/constants'
 
 export { FLOWRITE_GLOBAL_THREAD_ID }
-
-const isPlainObject = value => value != null && typeof value === 'object' && !Array.isArray(value)
 
 const createId = prefix => `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`
 
@@ -203,9 +202,17 @@ const compactThreads = threads => {
   return [...active, ...trimmedResolved]
 }
 
-export const saveComments = async (pathname, comments) => {
+const prepareCommentsForSave = comments => {
+  return compactThreads(normalizeComments(comments))
+}
+
+const writePreparedComments = async (pathname, comments) => {
   const { commentsFile } = getSidecarPaths(pathname)
-  await writeJsonSidecar(commentsFile, compactThreads(normalizeComments(comments)))
+  await writeJsonSidecar(commentsFile, comments)
+}
+
+export const saveComments = async (pathname, comments) => {
+  await writePreparedComments(pathname, prepareCommentsForSave(comments))
 }
 
 export const appendCommentToThread = async (pathname, {
@@ -257,12 +264,17 @@ export const appendCommentToThread = async (pathname, {
   thread.comments = Array.isArray(thread.comments) ? thread.comments : []
   thread.comments.push(comment)
 
-  await saveComments(pathname, comments)
+  const persistedComments = prepareCommentsForSave(comments)
+  await writePreparedComments(pathname, persistedComments)
+  const persistedThread = persistedComments.find(candidate => candidate.id === resolvedThreadId) || thread
+  const persistedComment = Array.isArray(persistedThread.comments)
+    ? persistedThread.comments.find(entry => entry.id === comment.id) || comment
+    : comment
 
   return {
-    comments,
-    thread,
-    comment
+    comments: persistedComments,
+    thread: persistedThread,
+    comment: persistedComment
   }
 }
 
@@ -301,7 +313,15 @@ export const deleteThreadFromComments = async (pathname, {
   }
 
   try {
-    await saveComments(pathname, nextComments)
+    const persistedComments = prepareCommentsForSave(nextComments)
+    await writePreparedComments(pathname, persistedComments)
+
+    return {
+      pathname,
+      comments: persistedComments,
+      suggestions: nextSuggestions,
+      deleted: true
+    }
   } catch (error) {
     if (nextSuggestions.length !== suggestions.length) {
       try {
@@ -311,17 +331,5 @@ export const deleteThreadFromComments = async (pathname, {
       }
     }
     throw error
-  }
-
-  const [persistedComments, persistedSuggestions] = await Promise.all([
-    loadComments(pathname),
-    loadSuggestions(pathname)
-  ])
-
-  return {
-    pathname,
-    comments: persistedComments,
-    suggestions: persistedSuggestions,
-    deleted: true
   }
 }

@@ -56,6 +56,40 @@ const mountGlobalComments = store => {
 }
 
 describe('Flowrite global comments', function () {
+  it('only listens for pointer reveal while distraction-free writing is enabled', async function () {
+    const store = createStore()
+    const originalAddEventListener = document.addEventListener
+    const originalRemoveEventListener = document.removeEventListener
+    const addCalls = []
+    const removeCalls = []
+
+    document.addEventListener = function (type, listener, options) {
+      addCalls.push({ type, listener, options })
+    }
+    document.removeEventListener = function (type, listener, options) {
+      removeCalls.push({ type, listener, options })
+    }
+
+    const vm = mountGlobalComments(store)
+
+    try {
+      await Vue.nextTick()
+      expect(addCalls.filter(call => call.type === 'mousemove')).to.have.length(0)
+
+      store.state.layout.distractionFreeWriting = true
+      await Vue.nextTick()
+      expect(addCalls.filter(call => call.type === 'mousemove')).to.have.length(1)
+
+      store.state.layout.distractionFreeWriting = false
+      await Vue.nextTick()
+      expect(removeCalls.filter(call => call.type === 'mousemove')).to.have.length(1)
+    } finally {
+      vm.$destroy()
+      document.addEventListener = originalAddEventListener
+      document.removeEventListener = originalRemoveEventListener
+    }
+  })
+
   it('clears local draft state when the active document changes', async function () {
     const store = createStore()
     const vm = mountGlobalComments(store)

@@ -1,72 +1,9 @@
 import { EventEmitter } from 'events'
 import { createRequire as nodeCreateRequire } from 'module'
 import { Worker } from 'worker_threads'
-import {
-  File as UndiciFile,
-  FormData as UndiciFormData,
-  Headers as UndiciHeaders,
-  Request as UndiciRequest,
-  Response as UndiciResponse,
-  fetch as undiciFetch
-} from 'undici'
+import { resolveNodeFetch } from './webApiPolyfills'
 
 export const MAX_TOOL_ITERATIONS = 8
-
-const UNDICI_WEB_APIS = {
-  fetch: undiciFetch,
-  Headers: UndiciHeaders,
-  Request: UndiciRequest,
-  Response: UndiciResponse,
-  FormData: UndiciFormData,
-  File: UndiciFile
-}
-
-const ensureRuntimeWebAPIs = (webApis = UNDICI_WEB_APIS) => {
-  const hasAllRequiredApis = typeof globalThis.fetch === 'function' &&
-    typeof globalThis.Headers === 'function' &&
-    typeof globalThis.Request === 'function' &&
-    typeof globalThis.Response === 'function' &&
-    typeof globalThis.FormData === 'function'
-
-  if (hasAllRequiredApis) {
-    return globalThis
-  }
-
-  const {
-    fetch,
-    Headers,
-    Request,
-    Response,
-    FormData,
-    File
-  } = webApis
-
-  if (typeof globalThis.fetch !== 'function') {
-    globalThis.fetch = fetch
-  }
-  if (typeof globalThis.Headers !== 'function') {
-    globalThis.Headers = Headers
-  }
-  if (typeof globalThis.Request !== 'function') {
-    globalThis.Request = Request
-  }
-  if (typeof globalThis.Response !== 'function') {
-    globalThis.Response = Response
-  }
-  if (typeof globalThis.FormData !== 'function') {
-    globalThis.FormData = FormData
-  }
-  if (typeof globalThis.File !== 'function' && typeof File === 'function') {
-    globalThis.File = File
-  }
-
-  return globalThis
-}
-
-const resolveRuntimeFetch = (webApis = UNDICI_WEB_APIS) => {
-  const runtimeGlobal = ensureRuntimeWebAPIs(webApis)
-  return runtimeGlobal.fetch.bind(runtimeGlobal)
-}
 
 const createClientRuntime = (workerData, clientConfig) => {
   const runtimeRequire = (() => {
@@ -97,7 +34,7 @@ const createClientRuntime = (workerData, clientConfig) => {
       apiKey: clientConfig.apiKey,
       baseURL: clientConfig.baseURL,
       defaultHeaders: clientConfig.defaultHeaders,
-      fetch: resolveRuntimeFetch()
+      fetch: resolveNodeFetch()
     }),
     model: clientConfig.model
   }
@@ -286,55 +223,14 @@ const buildRuntimeWorkerSource = () => `
     const anthropicModule = runtimeRequire('@anthropic-ai/sdk')
     const Anthropic = anthropicModule.default || anthropicModule
 
-    const ensureWorkerWebApis = () => {
-      const hasAllRequiredApis = typeof globalThis.fetch === 'function' &&
-        typeof globalThis.Headers === 'function' &&
-        typeof globalThis.Request === 'function' &&
-        typeof globalThis.Response === 'function' &&
-        typeof globalThis.FormData === 'function'
-
-      if (hasAllRequiredApis) {
-        return globalThis
-      }
-
-      const undiciModule = require('undici')
-      const {
-        fetch,
-        Headers,
-        Request,
-        Response,
-        FormData,
-        File
-      } = undiciModule
-
-      if (typeof globalThis.fetch !== 'function') {
-        globalThis.fetch = fetch
-      }
-      if (typeof globalThis.Headers !== 'function') {
-        globalThis.Headers = Headers
-      }
-      if (typeof globalThis.Request !== 'function') {
-        globalThis.Request = Request
-      }
-      if (typeof globalThis.Response !== 'function') {
-        globalThis.Response = Response
-      }
-      if (typeof globalThis.FormData !== 'function') {
-        globalThis.FormData = FormData
-      }
-      if (typeof globalThis.File !== 'function' && typeof File === 'function') {
-        globalThis.File = File
-      }
-
-      return globalThis
-    }
+    const webApiPolyfills = runtimeRequire(workerData.webApiModulePath)
 
     return {
       client: new Anthropic({
         apiKey: clientConfig.apiKey,
         baseURL: clientConfig.baseURL,
         defaultHeaders: clientConfig.defaultHeaders,
-        fetch: ensureWorkerWebApis().fetch.bind(globalThis)
+        fetch: webApiPolyfills.resolveNodeFetch(globalThis)
       }),
       model: clientConfig.model
     }
@@ -530,7 +426,8 @@ export const createRuntimeWorker = (runtimeConfig = {}) => {
     return new Worker(buildRuntimeWorkerSource(), {
       eval: true,
       workerData: {
-        clientModulePath: runtimeConfig.clientModulePath || null
+        clientModulePath: runtimeConfig.clientModulePath || null,
+        webApiModulePath: nodeCreateRequire(__filename).resolve('./webApiPolyfills.js')
       }
     })
   } catch (error) {

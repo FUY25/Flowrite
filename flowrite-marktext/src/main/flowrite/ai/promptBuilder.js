@@ -26,16 +26,9 @@ export const REVIEW_PERSONA_INSTRUCTIONS = {
 }
 
 const buildCollaborationSystemInstruction = ({
-  collaborationMode = FLOWRITE_COLLABORATION_MODE_COMMENT_ONLY,
-  currentThreadMode = FLOWRITE_THREAD_MODE_COMMENTING,
-  latestUserMessage = ''
+  latestUserMessage = '',
+  nextThreadMode = FLOWRITE_THREAD_MODE_COMMENTING
 } = {}) => {
-  const nextThreadMode = resolveNextThreadMode({
-    collaborationMode,
-    currentThreadMode,
-    latestUserMessage
-  })
-
   if (nextThreadMode === FLOWRITE_THREAD_MODE_COWRITING) {
     const instructions = [
       'Cowriting mode is active for this reply.',
@@ -191,6 +184,11 @@ export const buildRuntimeRequest = ({
   maxTokens = 1024
 }) => {
   const currentTurn = buildCurrentTurnUserMessage({ markdown, prompt })
+  const nextThreadMode = resolveNextThreadMode({
+    collaborationMode,
+    currentThreadMode,
+    latestUserMessage
+  })
   const system = [
     {
       type: 'text',
@@ -209,16 +207,9 @@ export const buildRuntimeRequest = ({
   system.push({
     type: 'text',
     text: buildCollaborationSystemInstruction({
-      collaborationMode,
-      currentThreadMode,
-      latestUserMessage
+      latestUserMessage,
+      nextThreadMode
     })
-  })
-
-  const nextThreadMode = resolveNextThreadMode({
-    collaborationMode,
-    currentThreadMode,
-    latestUserMessage
   })
 
   return {
