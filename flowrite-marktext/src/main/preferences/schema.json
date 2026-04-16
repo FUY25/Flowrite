@@ -111,6 +111,13 @@
     "pattern": "^[^\\s]+((-|\\s)*[^\\s])*$",
     "default": "DejaVu Sans Mono"
   },
+  "workspaceBackgroundWarmth": {
+    "description": "Editor--Workspace background warmth",
+    "type": "number",
+    "minimum": 0,
+    "maximum": 100,
+    "default": 0
+  },
   "codeBlockLineNumbers": {
     "description": "Editor--Whether to show the line numbers",
     "type": "boolean",

@@ -1,7 +1,7 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
 import { expect } from 'chai'
-import { ipcRenderer } from 'electron'
+import { ipcRenderer as electronIpcRenderer } from 'electron'
 import flowriteModule, {
   createDefaultFlowriteState,
   registerFlowriteLifecycle
@@ -10,7 +10,16 @@ import preferencesModule from '../../../src/renderer/store/preferences.js'
 
 Vue.use(Vuex)
 
+const ipcRenderer = electronIpcRenderer || {
+  invoke: async () => {
+    throw new Error('Unexpected ipcRenderer.invoke call in test.')
+  },
+  on: () => {},
+  send: () => {}
+}
+
 const createPreferencesState = (flowrite = {}) => ({
+  workspaceBackgroundWarmth: 0,
   flowrite: {
     enabled: false,
     configured: false,
@@ -343,6 +352,17 @@ describe('Flowrite renderer store', function () {
     })
 
     expect(store.state.preferences.flowrite).to.deep.equal(flowritePayload)
+  })
+
+  it('hydrates workspace background warmth into renderer preferences state', async function () {
+    const store = createStore()
+    const nextPreferences = {
+      workspaceBackgroundWarmth: 42
+    }
+
+    store.commit('SET_USER_PREFERENCE', nextPreferences)
+
+    expect(store.state.preferences.workspaceBackgroundWarmth).to.equal(42)
   })
 
   it('sends the collaboration mode update through the renderer preference action', async function () {
