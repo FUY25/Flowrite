@@ -3,10 +3,18 @@ import fs from 'fs-extra'
 import log from 'electron-log'
 import { getSidecarPaths } from './sidecarPaths'
 import { resolveMarkdownFilePath } from '../../filesystem/markdownPaths'
+import { createDocumentId } from './documentIdentity'
 import { isPlainObject } from '../../../flowrite/objectUtils'
-import { rememberDocumentIndexEntry } from './documentIndex'
+import {
+  rememberDocumentIndexEntry,
+  findDocumentIndexEntry,
+  removeDocumentIndexEntry,
+  replaceDocumentIndexEntry
+} from './documentIndex'
 
 const DOCUMENT_VERSION = 1
+const DUPLICATE_DOCUMENT_CHOICE_START_NEW = 'start_new_commenting_session'
+const DUPLICATE_DOCUMENT_CHOICE_INHERIT = 'inherit_existing_comments'
 
 export const DEFAULT_DOCUMENT_RECORD = {
   version: DOCUMENT_VERSION,
@@ -132,6 +140,101 @@ const cleanupBackup = async backupPath => {
   }
 }
 
+const cloneJsonValue = value => JSON.parse(JSON.stringify(value))
+
+const createBlankDocumentRecord = ({ pathname, documentId }) => ({
+  ...DEFAULT_DOCUMENT_RECORD,
+  documentId,
+  lastKnownMarkdownPath: pathname,
+  version: DOCUMENT_VERSION
+})
+
+const createInheritedDocumentRecord = ({ sourceRecord, pathname, documentId }) => ({
+  ...DEFAULT_DOCUMENT_RECORD,
+  ...cloneJsonValue(sourceRecord),
+  documentId,
+  lastKnownMarkdownPath: pathname,
+  lastSnapshotSaveCycleId: null,
+  version: DOCUMENT_VERSION
+})
+
+const getMarkdownWriteOptions = rawDocument => ({
+  adjustLineEndingOnSave: rawDocument.adjustLineEndingOnSave,
+  lineEnding: rawDocument.lineEnding,
+  encoding: rawDocument.encoding,
+  trimTrailingNewline: rawDocument.trimTrailingNewline
+})
+
+const resolveComparablePath = pathname => {
+  if (!pathname) {
+    return ''
+  }
+
+  return resolveMarkdownFilePath(pathname)
+}
+
+const persistBootstrappedDocumentState = async ({
+  pathname,
+  rawDocument,
+  document,
+  comments,
+  suggestions
+}) => {
+  const { writeMarkdownFile } = await import('../../filesystem/markdown')
+
+  await writeMarkdownFile(pathname, rawDocument.markdown, getMarkdownWriteOptions(rawDocument), {
+    flowrite: {
+      document,
+      comments,
+      suggestions
+    }
+  })
+}
+
+const resetDestinationSnapshots = async pathname => {
+  const { snapshotsDir } = getSidecarPaths(pathname)
+  if (await fs.pathExists(snapshotsDir)) {
+    await fs.remove(snapshotsDir)
+  }
+  await fs.ensureDir(snapshotsDir)
+}
+
+const resolveLiveDocumentIdentityPath = async ({
+  candidatePath,
+  documentId,
+  loadMarkdownFile
+}) => {
+  const resolvedCandidatePath = resolveComparablePath(candidatePath)
+  if (!resolvedCandidatePath || !documentId || !await fs.pathExists(resolvedCandidatePath)) {
+    return ''
+  }
+
+  const candidateRecord = await loadDocumentRecord(resolvedCandidatePath)
+  if (candidateRecord.documentId === documentId) {
+    return resolvedCandidatePath
+  }
+
+  const candidateMarkdown = await loadMarkdownFile(resolvedCandidatePath, 'lf', true, 2)
+  return candidateMarkdown.flowriteDocumentId === documentId
+    ? resolvedCandidatePath
+    : ''
+}
+
+const resolveOrphanedMoveSourcePath = async ({
+  candidatePath,
+  documentId
+}) => {
+  const resolvedCandidatePath = resolveComparablePath(candidatePath)
+  if (!resolvedCandidatePath || !documentId) {
+    return ''
+  }
+
+  const candidateRecord = await loadDocumentRecord(resolvedCandidatePath)
+  return candidateRecord.documentId === documentId
+    ? resolvedCandidatePath
+    : ''
+}
+
 export const loadDocumentRecord = async pathname => {
   const { documentFile } = getSidecarPaths(pathname)
   const record = await loadJsonSidecar(documentFile, DEFAULT_DOCUMENT_RECORD)
@@ -148,6 +251,7 @@ export const saveDocumentRecord = async (pathname, record) => {
 
   pathname = resolveMarkdownFilePath(pathname)
   const { documentFile, documentDir } = getSidecarPaths(pathname)
+  const previousRecord = await loadDocumentRecord(pathname)
   const nextRecord = {
     ...DEFAULT_DOCUMENT_RECORD,
     ...record,
@@ -160,7 +264,10 @@ export const saveDocumentRecord = async (pathname, record) => {
   try {
     await writeJsonSidecar(documentFile, nextRecord)
 
-    await rememberDocumentIndexEntry({
+    await replaceDocumentIndexEntry({
+      previousDocumentId: previousRecord.documentId,
+      previousPathname: previousRecord.lastKnownMarkdownPath || '',
+      previousDocumentDir: documentDir,
       documentId: nextRecord.documentId,
       pathname: nextRecord.lastKnownMarkdownPath,
       documentDir
@@ -180,6 +287,186 @@ export const saveDocumentRecord = async (pathname, record) => {
   }
 
   return nextRecord
+}
+
+export const ensureDocumentIdentityForPath = async (pathname, {
+  resolveDuplicateDocumentChoice
+} = {}) => {
+  pathname = resolveMarkdownFilePath(pathname)
+  const { loadMarkdownFile } = await import('../../filesystem/markdown')
+  const rawDocument = await loadMarkdownFile(pathname, 'lf', true, 2)
+  const embeddedDocumentId = rawDocument.flowriteDocumentId || ''
+  const currentPaths = getSidecarPaths(pathname)
+  let currentRecord = await loadDocumentRecord(pathname)
+  const currentRecordKnownPath = resolveComparablePath(currentRecord.lastKnownMarkdownPath)
+  const recoveryDocumentId = embeddedDocumentId || currentRecord.documentId || ''
+
+  const indexedRecord = recoveryDocumentId
+    ? await findDocumentIndexEntry(recoveryDocumentId)
+    : null
+  const indexedCandidatePath = indexedRecord && indexedRecord.pathname
+    ? resolveComparablePath(indexedRecord.pathname)
+    : ''
+  const indexedCandidateExists = Boolean(
+    indexedCandidatePath &&
+    indexedCandidatePath !== pathname &&
+    await fs.pathExists(indexedCandidatePath)
+  )
+  const liveCurrentRecordPath = currentRecordKnownPath && currentRecordKnownPath !== pathname
+    ? await resolveLiveDocumentIdentityPath({
+      candidatePath: currentRecordKnownPath,
+      documentId: recoveryDocumentId,
+      loadMarkdownFile
+    })
+    : ''
+  const liveIndexedPath = indexedCandidatePath && indexedCandidatePath !== pathname
+    ? await resolveLiveDocumentIdentityPath({
+      candidatePath: indexedCandidatePath,
+      documentId: recoveryDocumentId,
+      loadMarkdownFile
+    })
+    : ''
+  const orphanedMoveSourcePath = indexedCandidatePath &&
+    indexedCandidatePath !== pathname &&
+    !indexedCandidateExists
+    ? await resolveOrphanedMoveSourcePath({
+      candidatePath: indexedCandidatePath,
+      documentId: recoveryDocumentId
+    })
+    : ''
+  const hasStaleIndexedMapping = Boolean(
+    recoveryDocumentId &&
+    indexedRecord &&
+    indexedCandidatePath &&
+    indexedCandidatePath !== pathname &&
+    !liveIndexedPath &&
+    ((indexedCandidateExists || !orphanedMoveSourcePath))
+  )
+
+  if (hasStaleIndexedMapping) {
+    await removeDocumentIndexEntry({
+      documentId: recoveryDocumentId,
+      pathname: indexedCandidatePath,
+      documentDir: indexedRecord.documentDir || ''
+    })
+  }
+
+  const duplicateSourcePath = liveCurrentRecordPath || liveIndexedPath
+
+  if (
+    indexedRecord &&
+    orphanedMoveSourcePath &&
+    indexedRecord.documentDir &&
+    indexedRecord.documentDir !== currentPaths.documentDir &&
+    !indexedCandidateExists &&
+    !duplicateSourcePath
+  ) {
+    await migrateSidecarDirectory(orphanedMoveSourcePath, pathname)
+    currentRecord = await loadDocumentRecord(pathname)
+  }
+
+  if (recoveryDocumentId && duplicateSourcePath) {
+    const {
+      loadComments
+    } = await import('./commentsStore')
+    const {
+      loadSuggestions
+    } = await import('./suggestionsStore')
+
+    const sourceDocumentRecord = await loadDocumentRecord(duplicateSourcePath)
+    const choice = typeof resolveDuplicateDocumentChoice === 'function'
+      ? await resolveDuplicateDocumentChoice({
+        documentId: recoveryDocumentId,
+        pathname,
+        existingPathname: duplicateSourcePath
+      })
+      : DUPLICATE_DOCUMENT_CHOICE_START_NEW
+    const nextDocumentId = createDocumentId()
+    const shouldInheritExistingComments = choice === DUPLICATE_DOCUMENT_CHOICE_INHERIT
+    const nextDocumentRecord = shouldInheritExistingComments
+      ? createInheritedDocumentRecord({
+        sourceRecord: sourceDocumentRecord,
+        pathname,
+        documentId: nextDocumentId
+      })
+      : createBlankDocumentRecord({
+        pathname,
+        documentId: nextDocumentId
+      })
+    const nextComments = shouldInheritExistingComments
+      ? cloneJsonValue(await loadComments(duplicateSourcePath))
+      : []
+    const nextSuggestions = shouldInheritExistingComments
+      ? cloneJsonValue(await loadSuggestions(duplicateSourcePath))
+      : []
+
+    await persistBootstrappedDocumentState({
+      pathname,
+      rawDocument,
+      document: nextDocumentRecord,
+      comments: nextComments,
+      suggestions: nextSuggestions
+    })
+
+    if (!shouldInheritExistingComments) {
+      await resetDestinationSnapshots(pathname)
+    }
+
+    return {
+      documentId: nextDocumentId,
+      pathname
+    }
+  }
+
+  if (embeddedDocumentId && recoveryDocumentId && currentRecord.documentId === recoveryDocumentId) {
+    if (currentRecordKnownPath !== pathname) {
+      currentRecord = await saveDocumentRecord(pathname, {
+        ...currentRecord,
+        lastKnownMarkdownPath: pathname
+      })
+    } else {
+      await rememberDocumentIndexEntry({
+        documentId: recoveryDocumentId,
+        pathname,
+        documentDir: currentPaths.documentDir
+      })
+    }
+
+    return {
+      documentId: recoveryDocumentId,
+      pathname
+    }
+  }
+
+  const nextDocumentId = recoveryDocumentId || createDocumentId()
+
+  if (!embeddedDocumentId && nextDocumentId) {
+    const { loadComments } = await import('./commentsStore')
+    const { loadSuggestions } = await import('./suggestionsStore')
+
+    await persistBootstrappedDocumentState({
+      pathname,
+      rawDocument,
+      document: {
+        ...currentRecord,
+        documentId: nextDocumentId,
+        lastKnownMarkdownPath: pathname
+      },
+      comments: await loadComments(pathname),
+      suggestions: await loadSuggestions(pathname)
+    })
+  } else {
+    await saveDocumentRecord(pathname, {
+      ...currentRecord,
+      documentId: nextDocumentId,
+      lastKnownMarkdownPath: pathname
+    })
+  }
+
+  return {
+    documentId: nextDocumentId,
+    pathname
+  }
 }
 
 export const migrateSidecarDirectory = async (oldPathname, newPathname) => {

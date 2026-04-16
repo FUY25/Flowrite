@@ -11,7 +11,7 @@ import { IMAGE_EXTENSIONS } from 'common/filesystem/paths'
 import { FlowriteSettings } from '../flowrite/settings/flowriteSettings'
 import FlowriteControllerBridge from '../flowrite/controller'
 import { getOnlineStatus } from '../flowrite/network/status'
-import { loadDocumentRecord } from '../flowrite/files/documentStore'
+import { ensureDocumentIdentityForPath, loadDocumentRecord } from '../flowrite/files/documentStore'
 import { loadComments } from '../flowrite/files/commentsStore'
 import { loadSuggestions } from '../flowrite/files/suggestionsStore'
 import { configureDocumentIndex } from '../flowrite/files/documentIndex'
@@ -175,8 +175,41 @@ class DataCenter extends EventEmitter {
     return this.flowriteSettings.testApiKey(settings)
   }
 
-  async bootstrapFlowriteDocument (pathname) {
+  async resolveDuplicateDocumentChoice ({
+    existingPathname
+  } = {}, {
+    browserWindow
+  } = {}) {
+    const { response } = await dialog.showMessageBox(browserWindow || null, {
+      type: 'question',
+      buttons: [
+        'Start new commenting session (recommended)',
+        'Inherit existing comments'
+      ],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Flowrite found existing comments for this copy',
+      message: 'This file appears to be a copy of another Flowrite document.',
+      detail: existingPathname
+        ? `The original Flowrite document still exists at:\n${existingPathname}\n\nChoose whether this copy should start fresh or inherit the existing comments into its own new session.`
+        : 'Choose whether this copy should start fresh or inherit the existing comments into its own new session.'
+    })
+
+    return response === 1
+      ? 'inherit_existing_comments'
+      : 'start_new_commenting_session'
+  }
+
+  async bootstrapFlowriteDocument (pathname, {
+    browserWindow
+  } = {}) {
     const availability = this.flowriteSettings.getPublicState()
+    const runtimeReady = Boolean(
+      availability &&
+      availability.enabled &&
+      availability.configured &&
+      availability.online
+    )
 
     if (!pathname) {
       return {
@@ -188,20 +221,50 @@ class DataCenter extends EventEmitter {
       }
     }
 
-    await this.flowriteController.reconcileSuggestionsWithMarkdown(pathname)
+    if (!runtimeReady) {
+      const [document, comments, suggestions] = await Promise.all([
+        loadDocumentRecord(pathname),
+        loadComments(pathname),
+        loadSuggestions(pathname)
+      ])
+
+      return {
+        document,
+        comments,
+        suggestions,
+        pathname,
+        availability,
+        runtimeReady
+      }
+    }
+
+    const resolveDuplicateDocumentChoice = typeof this.resolveDuplicateDocumentChoice === 'function'
+      ? context => this.resolveDuplicateDocumentChoice(context, {
+        browserWindow
+      })
+      : async () => 'start_new_commenting_session'
+
+    const identity = await ensureDocumentIdentityForPath(pathname, {
+      resolveDuplicateDocumentChoice
+    })
+    const resolvedPath = identity.pathname || pathname
+
+    await this.flowriteController.reconcileSuggestionsWithMarkdown(resolvedPath)
 
     const [document, comments, suggestions] = await Promise.all([
-      loadDocumentRecord(pathname),
-      loadComments(pathname),
-      loadSuggestions(pathname)
+      loadDocumentRecord(resolvedPath),
+      loadComments(resolvedPath),
+      loadSuggestions(resolvedPath)
     ])
 
     return {
       document,
       comments,
       suggestions,
+      pathname: resolvedPath,
+      documentId: identity.documentId,
       availability,
-      runtimeReady: Boolean(availability.enabled)
+      runtimeReady
     }
   }
 
@@ -264,7 +327,10 @@ class DataCenter extends EventEmitter {
     })
 
     ipcMain.handle('mt::flowrite:bootstrap-document', async (e, { pathname } = {}) => {
-      return this.bootstrapFlowriteDocument(pathname)
+      const browserWindow = BrowserWindow.fromWebContents(e.sender)
+      return this.bootstrapFlowriteDocument(pathname, {
+        browserWindow
+      })
     })
 
     ipcMain.handle('mt::flowrite:submit-global-comment', async (e, payload = {}) => {

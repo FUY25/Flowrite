@@ -14,6 +14,7 @@ import {
 import {
   loadDocumentRecord,
   migrateSidecarDirectory,
+  ensureDocumentIdentityForPath,
   saveDocumentRecord,
   moveDocumentWithSidecars
 } from '../../../src/main/flowrite/files/documentStore'
@@ -1076,7 +1077,7 @@ describe('Flowrite sidecar storage', function () {
     expect(newEntry).to.equal(null)
   })
 
-  it('keeps persisted document.json and index entry when backup cleanup fails after commit', async function () {
+  it('keeps persisted document.json and only the current index entry when backup cleanup fails after commit', async function () {
     configureDocumentIndex({ rootPath: tempRoot })
 
     const pathname = path.join(tempRoot, 'identity-record-cleanup.md')
@@ -1115,7 +1116,354 @@ describe('Flowrite sidecar storage', function () {
 
     expect(error).to.equal(null)
     expect(documentRecord.documentId).to.equal('doc-new')
-    expect(oldEntry.pathname).to.equal(pathname)
+    expect(oldEntry).to.equal(null)
     expect(newEntry.pathname).to.equal(pathname)
+  })
+
+  it('relinks a moved markdown file to the old sidecar when documentId matches the recovery index', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const oldPath = path.join(tempRoot, 'docs', 'draft.md')
+    const newPath = path.join(tempRoot, 'archive', 'draft.md')
+    const oldSidecarDir = getSidecarPaths(oldPath).documentDir
+    const newSidecarDir = getSidecarPaths(newPath).documentDir
+
+    await fs.ensureDir(path.dirname(oldPath))
+    await fs.ensureDir(path.dirname(newPath))
+    await fs.writeFile(oldPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await saveDocumentRecord(oldPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath
+    })
+    await saveComments(oldPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T10:00:00.000Z',
+      updatedAt: '2026-04-16T10:00:00.000Z',
+      comments: [{
+        id: 'comment-1',
+        author: 'assistant',
+        body: 'Keep me',
+        createdAt: '2026-04-16T10:00:00.000Z'
+      }]
+    }])
+    await rememberDocumentIndexEntry({
+      documentId: 'doc-123',
+      pathname: oldPath,
+      documentDir: oldSidecarDir
+    })
+
+    await fs.move(oldPath, newPath)
+
+    const identity = await ensureDocumentIdentityForPath(newPath, {
+      resolveDuplicateDocumentChoice () {
+        throw new Error('copy prompt should not run for true moves')
+      }
+    })
+    const comments = await loadComments(newPath)
+    const documentRecord = await loadDocumentRecord(newPath)
+    const indexEntry = await findDocumentIndexEntry('doc-123')
+
+    expect(identity).to.deep.equal({
+      documentId: 'doc-123',
+      pathname: newPath
+    })
+    expect(comments).to.have.length(1)
+    expect(comments[0].comments[0].body).to.equal('Keep me')
+    expect(await fs.pathExists(oldSidecarDir)).to.equal(false)
+    expect(await fs.pathExists(newSidecarDir)).to.equal(true)
+    expect(documentRecord.documentId).to.equal('doc-123')
+    expect(documentRecord.lastKnownMarkdownPath).to.equal(newPath)
+    expect(indexEntry.pathname).to.equal(newPath)
+    expect(indexEntry.documentDir).to.equal(newSidecarDir)
+  })
+
+  it('writes a generated documentId into markdown during bootstrap-time identity repair for legacy files', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const pathname = path.join(tempRoot, 'legacy-bootstrap.md')
+    await fs.ensureDir(path.dirname(pathname))
+    await fs.writeFile(pathname, '# Draft\n', 'utf8')
+
+    const identity = await ensureDocumentIdentityForPath(pathname)
+    const documentRecord = await loadDocumentRecord(pathname)
+    const markdown = await fs.readFile(pathname, 'utf8')
+
+    expect(identity.documentId).to.match(/^[0-9a-f-]{36}$/)
+    expect(documentRecord.documentId).to.equal(identity.documentId)
+    expect(markdown).to.equal(`<!-- flowrite:id=${identity.documentId} -->\n\n# Draft\n`)
+  })
+
+  it('writes the embedded documentId marker for an existing sidecar-backed legacy document during bootstrap repair', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const pathname = path.join(tempRoot, 'existing-sidecar-legacy.md')
+    await fs.ensureDir(path.dirname(pathname))
+    await fs.writeFile(pathname, '# Draft\n', 'utf8')
+    await saveDocumentRecord(pathname, {
+      documentId: 'doc-existing',
+      lastKnownMarkdownPath: pathname,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Keep this history'
+      }]
+    })
+
+    const identity = await ensureDocumentIdentityForPath(pathname)
+    const documentRecord = await loadDocumentRecord(pathname)
+    const markdown = await fs.readFile(pathname, 'utf8')
+
+    expect(identity.documentId).to.equal('doc-existing')
+    expect(documentRecord.documentId).to.equal('doc-existing')
+    expect(documentRecord.lastKnownMarkdownPath).to.equal(pathname)
+    expect(documentRecord.conversationHistory).to.deep.equal([{
+      role: 'assistant',
+      text: 'Keep this history'
+    }])
+    expect(markdown).to.equal('<!-- flowrite:id=doc-existing -->\n\n# Draft\n')
+  })
+
+  it('prompts for copy/fork when the current sidecar lastKnownMarkdownPath still points to an existing original file', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const oldPath = path.join(tempRoot, 'docs', 'draft.md')
+    const newPath = path.join(tempRoot, 'archive', 'draft-copy.md')
+
+    await fs.ensureDir(path.dirname(oldPath))
+    await fs.ensureDir(path.dirname(newPath))
+    await fs.writeFile(oldPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await fs.writeFile(newPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await saveDocumentRecord(oldPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Original history'
+      }]
+    })
+    await saveComments(oldPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T10:00:00.000Z',
+      updatedAt: '2026-04-16T10:00:00.000Z',
+      comments: [{
+        id: 'comment-old',
+        author: 'assistant',
+        body: 'Original comment',
+        createdAt: '2026-04-16T10:00:00.000Z'
+      }]
+    }])
+
+    // Simulate a duplicated sidecar that already agrees with the copied markdown.
+    await saveDocumentRecord(newPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Duplicated history'
+      }]
+    })
+    await saveComments(newPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T11:00:00.000Z',
+      updatedAt: '2026-04-16T11:00:00.000Z',
+      comments: [{
+        id: 'comment-copy',
+        author: 'assistant',
+        body: 'Duplicated comment',
+        createdAt: '2026-04-16T11:00:00.000Z'
+      }]
+    }])
+
+    const promptCalls = []
+    const identity = await ensureDocumentIdentityForPath(newPath, {
+      async resolveDuplicateDocumentChoice (context) {
+        promptCalls.push(context)
+        return 'start_new_commenting_session'
+      }
+    })
+    const newRecord = await loadDocumentRecord(newPath)
+    const newComments = await loadComments(newPath)
+    const oldRecord = await loadDocumentRecord(oldPath)
+    const oldComments = await loadComments(oldPath)
+    const markdown = await fs.readFile(newPath, 'utf8')
+
+    expect(promptCalls).to.have.length(1)
+    expect(promptCalls[0].documentId).to.equal('doc-123')
+    expect(promptCalls[0].pathname).to.equal(newPath)
+    expect(promptCalls[0].existingPathname).to.equal(oldPath)
+    expect(identity.documentId).to.match(/^[0-9a-f-]{36}$/)
+    expect(identity.documentId).to.not.equal('doc-123')
+    expect(newRecord.documentId).to.equal(identity.documentId)
+    expect(newRecord.lastKnownMarkdownPath).to.equal(newPath)
+    expect(newRecord.conversationHistory).to.deep.equal([])
+    expect(newComments).to.deep.equal([])
+    expect(oldRecord.documentId).to.equal('doc-123')
+    expect(oldRecord.lastKnownMarkdownPath).to.equal(oldPath)
+    expect(oldComments[0].comments[0].body).to.equal('Original comment')
+    expect(markdown).to.equal(`<!-- flowrite:id=${identity.documentId} -->\n\n# Draft\n`)
+  })
+
+  it('clears destination snapshots when starting a new commenting session from a copied sidecar', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const oldPath = path.join(tempRoot, 'docs', 'draft.md')
+    const newPath = path.join(tempRoot, 'archive', 'draft-copy.md')
+
+    await fs.ensureDir(path.dirname(oldPath))
+    await fs.ensureDir(path.dirname(newPath))
+    await fs.writeFile(oldPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await fs.writeFile(newPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await saveDocumentRecord(oldPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath
+    })
+    await saveDocumentRecord(newPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath
+    })
+    await ensureSnapshotForAcceptedSuggestion(newPath, '# Draft before fork\n', {
+      saveCycleId: 'save-cycle-copy',
+      suggestionId: 'suggestion-copy',
+      createdAt: '2026-04-16T16:00:00.000Z'
+    })
+
+    const beforeSnapshots = await listSnapshots(newPath)
+    const identity = await ensureDocumentIdentityForPath(newPath, {
+      async resolveDuplicateDocumentChoice () {
+        return 'start_new_commenting_session'
+      }
+    })
+    const afterSnapshots = await listSnapshots(newPath)
+    const documentRecord = await loadDocumentRecord(newPath)
+
+    expect(beforeSnapshots).to.have.length(1)
+    expect(identity.documentId).to.not.equal('doc-123')
+    expect(documentRecord.documentId).to.equal(identity.documentId)
+    expect(afterSnapshots).to.deep.equal([])
+    expect(await fs.pathExists(getSidecarPaths(newPath).snapshotsDir)).to.equal(true)
+  })
+
+  it('ignores a stale index mapping whose target no longer belongs to that documentId', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const canonicalPath = path.join(tempRoot, 'docs', 'canonical.md')
+    const copiedPath = path.join(tempRoot, 'archive', 'copied.md')
+
+    await fs.ensureDir(path.dirname(canonicalPath))
+    await fs.ensureDir(path.dirname(copiedPath))
+    await fs.writeFile(canonicalPath, '<!-- flowrite:id=doc-new -->\n\n# Canonical\n', 'utf8')
+    await fs.writeFile(copiedPath, '<!-- flowrite:id=doc-old -->\n\n# Copy\n', 'utf8')
+
+    await saveDocumentRecord(canonicalPath, {
+      documentId: 'doc-new',
+      lastKnownMarkdownPath: canonicalPath
+    })
+    await saveComments(canonicalPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T12:00:00.000Z',
+      updatedAt: '2026-04-16T12:00:00.000Z',
+      comments: [{
+        id: 'canonical-comment-1',
+        author: 'assistant',
+        body: 'Canonical comment',
+        createdAt: '2026-04-16T12:00:00.000Z'
+      }]
+    }])
+    await rememberDocumentIndexEntry({
+      documentId: 'doc-old',
+      pathname: canonicalPath,
+      documentDir: getSidecarPaths(canonicalPath).documentDir
+    })
+
+    const promptCalls = []
+    const identity = await ensureDocumentIdentityForPath(copiedPath, {
+      async resolveDuplicateDocumentChoice (context) {
+        promptCalls.push(context)
+        return 'inherit_existing_comments'
+      }
+    })
+    const copiedRecord = await loadDocumentRecord(copiedPath)
+    const canonicalRecord = await loadDocumentRecord(canonicalPath)
+    const copiedMarkdown = await fs.readFile(copiedPath, 'utf8')
+    const canonicalComments = await loadComments(canonicalPath)
+    const copiedComments = await loadComments(copiedPath)
+    const staleEntry = await findDocumentIndexEntry('doc-old')
+    const currentEntry = await findDocumentIndexEntry('doc-new')
+
+    expect(promptCalls).to.deep.equal([])
+    expect(identity.documentId).to.equal('doc-old')
+    expect(copiedRecord.documentId).to.equal('doc-old')
+    expect(copiedRecord.lastKnownMarkdownPath).to.equal(copiedPath)
+    expect(copiedMarkdown).to.equal('<!-- flowrite:id=doc-old -->\n\n# Copy\n')
+    expect(copiedComments).to.deep.equal([])
+    expect(canonicalRecord.documentId).to.equal('doc-new')
+    expect(canonicalRecord.lastKnownMarkdownPath).to.equal(canonicalPath)
+    expect(canonicalComments).to.have.length(1)
+    expect(canonicalComments[0].comments[0].body).to.equal('Canonical comment')
+    expect(await fs.pathExists(getSidecarPaths(canonicalPath).documentDir)).to.equal(true)
+    expect(staleEntry.pathname).to.equal(copiedPath)
+    expect(staleEntry.documentDir).to.equal(getSidecarPaths(copiedPath).documentDir)
+    expect(currentEntry.pathname).to.equal(canonicalPath)
+  })
+
+  it('does not migrate orphaned sidecars from a missing-markdown stale index mapping', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const orphanPath = path.join(tempRoot, 'docs', 'orphaned.md')
+    const recoveredPath = path.join(tempRoot, 'archive', 'recovered.md')
+
+    await fs.ensureDir(path.dirname(orphanPath))
+    await fs.ensureDir(path.dirname(recoveredPath))
+    await fs.writeFile(recoveredPath, '<!-- flowrite:id=doc-old -->\n\n# Recovered\n', 'utf8')
+
+    await saveDocumentRecord(orphanPath, {
+      documentId: 'doc-other',
+      lastKnownMarkdownPath: orphanPath
+    })
+    await saveComments(orphanPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T13:00:00.000Z',
+      updatedAt: '2026-04-16T13:00:00.000Z',
+      comments: [{
+        id: 'orphan-comment-1',
+        author: 'assistant',
+        body: 'Orphaned comment',
+        createdAt: '2026-04-16T13:00:00.000Z'
+      }]
+    }])
+    await rememberDocumentIndexEntry({
+      documentId: 'doc-old',
+      pathname: orphanPath,
+      documentDir: getSidecarPaths(orphanPath).documentDir
+    })
+    await fs.remove(orphanPath)
+
+    const promptCalls = []
+    const identity = await ensureDocumentIdentityForPath(recoveredPath, {
+      async resolveDuplicateDocumentChoice (context) {
+        promptCalls.push(context)
+        return 'inherit_existing_comments'
+      }
+    })
+    const recoveredRecord = await loadDocumentRecord(recoveredPath)
+    const recoveredComments = await loadComments(recoveredPath)
+    const orphanComments = await loadComments(orphanPath)
+    const repairedEntry = await findDocumentIndexEntry('doc-old')
+
+    expect(promptCalls).to.deep.equal([])
+    expect(identity.documentId).to.equal('doc-old')
+    expect(recoveredRecord.documentId).to.equal('doc-old')
+    expect(recoveredRecord.lastKnownMarkdownPath).to.equal(recoveredPath)
+    expect(recoveredComments).to.deep.equal([])
+    expect(orphanComments).to.have.length(1)
+    expect(orphanComments[0].comments[0].body).to.equal('Orphaned comment')
+    expect(await fs.pathExists(getSidecarPaths(orphanPath).documentDir)).to.equal(true)
+    expect(await fs.pathExists(getSidecarPaths(recoveredPath).documentDir)).to.equal(true)
+    expect(repairedEntry.pathname).to.equal(recoveredPath)
+    expect(repairedEntry.documentDir).to.equal(getSidecarPaths(recoveredPath).documentDir)
   })
 })

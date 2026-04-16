@@ -51,6 +51,15 @@ const enqueueDocumentIndexWrite = operation => {
   return nextWrite
 }
 
+const writeDocumentIndex = async mutateIndex => {
+  return enqueueDocumentIndexWrite(async () => {
+    const index = await loadDocumentIndex()
+    const nextIndex = await mutateIndex(index)
+    await persistDocumentIndex(nextIndex)
+    return nextIndex
+  })
+}
+
 export const configureDocumentIndex = ({ rootPath } = {}) => {
   documentIndexRoot = rootPath ? path.resolve(rootPath) : ''
 }
@@ -64,21 +73,93 @@ export const rememberDocumentIndexEntry = async ({
     return null
   }
 
-  return enqueueDocumentIndexWrite(async () => {
-    const index = await loadDocumentIndex()
+  let nextEntry = null
+  await writeDocumentIndex(async index => {
     const entry = {
       pathname: pathname || '',
       documentDir: documentDir || '',
       updatedAt: new Date().toISOString()
     }
+    nextEntry = entry
 
-    await persistDocumentIndex({
+    return {
       ...index,
       [documentId]: entry
-    })
-
-    return entry
+    }
   })
+  return nextEntry
+}
+
+export const removeDocumentIndexEntry = async ({
+  documentId,
+  pathname,
+  documentDir
+} = {}) => {
+  if (!documentId) {
+    return false
+  }
+
+  let didRemove = false
+  await writeDocumentIndex(async index => {
+    const entry = index[documentId]
+    if (!isPlainObject(entry)) {
+      return index
+    }
+
+    const pathnameMatches = pathname === undefined || pathname === '' || entry.pathname === pathname
+    const documentDirMatches = documentDir === undefined || documentDir === '' || entry.documentDir === documentDir
+    if (!pathnameMatches || !documentDirMatches) {
+      return index
+    }
+
+    didRemove = true
+    const nextIndex = { ...index }
+    delete nextIndex[documentId]
+    return nextIndex
+  })
+  return didRemove
+}
+
+export const replaceDocumentIndexEntry = async ({
+  previousDocumentId,
+  previousPathname,
+  previousDocumentDir,
+  documentId,
+  pathname,
+  documentDir
+} = {}) => {
+  if (!previousDocumentId && !documentId) {
+    return null
+  }
+
+  let nextEntry = null
+  await writeDocumentIndex(async index => {
+    const nextIndex = { ...index }
+
+    if (previousDocumentId && previousDocumentId !== documentId) {
+      const previousEntry = nextIndex[previousDocumentId]
+      if (isPlainObject(previousEntry)) {
+        const pathnameMatches = !previousPathname || previousEntry.pathname === previousPathname
+        const documentDirMatches = !previousDocumentDir || previousEntry.documentDir === previousDocumentDir
+        if (pathnameMatches && documentDirMatches) {
+          delete nextIndex[previousDocumentId]
+        }
+      }
+    }
+
+    if (documentId) {
+      nextEntry = {
+        pathname: pathname || '',
+        documentDir: documentDir || '',
+        updatedAt: new Date().toISOString()
+      }
+      nextIndex[documentId] = nextEntry
+    }
+
+    return nextIndex
+  })
+
+  return nextEntry
 }
 
 export const findDocumentIndexEntry = async documentId => {
