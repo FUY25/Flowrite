@@ -269,6 +269,11 @@ describe('Flowrite AI runtime', function () {
     })
 
     try {
+      await documentStore.saveDocumentRecord(documentPath, {
+        documentId: 'doc-runtime-history',
+        lastKnownMarkdownPath: documentPath
+      })
+
       const result = await manager.runJob({
         jobType: 'thread_reply',
         documentPath,
@@ -283,6 +288,7 @@ describe('Flowrite AI runtime', function () {
       expect(toolCalls).to.have.length(1)
       expect(toolCalls[0].name).to.equal('create_comment')
       expect(toolCalls[0].documentPath).to.equal(documentPath)
+      expect(documentRecord.documentId).to.equal('doc-runtime-history')
       expect(documentRecord.conversationHistory).to.be.an('array')
       expect(documentRecord.conversationHistory.length).to.be.above(0)
       expect(documentRecord.historyTokenEstimate).to.be.a('number').above(0)

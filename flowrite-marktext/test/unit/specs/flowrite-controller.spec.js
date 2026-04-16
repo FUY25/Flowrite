@@ -314,6 +314,7 @@ describe('Flowrite controller', function () {
 
     const markdown = await fs.readFile(pathname, 'utf8')
 
+    expect(payload).to.have.property('documentId', payload.document.documentId)
     expect(payload.documentId).to.match(/^[0-9a-f-]{36}$/)
     expect(payload.document.documentId).to.equal(payload.documentId)
     expect(markdown).to.equal(`<!-- flowrite:id=${payload.documentId} -->\n\n# Draft\n`)
