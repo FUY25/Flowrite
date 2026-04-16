@@ -7,16 +7,19 @@ Last updated: 2026-04-11
 ## Completed (V1 Foundation)
 
 ### 1. MarkText Fork & UI Foundation
+
 - Forked MarkText as the editing base (Electron + Vue 2 + Muya)
 - Normalized repo layout (`vendor/marktext/` + `flowrite-marktext/`)
 - Flowrite-specific styling inheriting MarkText's calm aesthetic
 
 ### 2. Anthropic SDK Integration
+
 - `@anthropic-ai/sdk` v0.86.1 added to dependencies
 - Messages API with structured tool use (not Managed Agents)
 - Prompt caching on stable system/document blocks
 
 ### 3. AI Backend Runtime
+
 - Worker-thread orchestration (`runtimeWorker.js`, `runtimeManager.js`)
 - Anthropic client with safeStorage API key management
 - Prompt builder with persona injection (friendly/critical/improvement)
@@ -26,6 +29,7 @@ Last updated: 2026-04-11
 - Online/offline status detection
 
 ### 4. Sidecar Storage System
+
 - `.flowrite/` sidecar directory per document
 - `document.json` (conversation history, schema version)
 - `comments.json` (global + margin threads with anchors)
@@ -34,12 +38,14 @@ Last updated: 2026-04-11
 - Corrupt JSON recovery with `.corrupt` backup
 
 ### 5. Global Comments Section
+
 - Bottom-of-document discussion area
 - Inline thread list with composer
 - AI reply streaming via IPC
 - Thread persistence across sessions
 
 ### 6. Margin Comments System
+
 - "Ask Flowrite" popover on any text selection
 - Margin-attached annotation cards (Notion-style)
 - Persistent gutter dots (amber, editorial)
@@ -50,6 +56,7 @@ Last updated: 2026-04-11
 - Card compression only when region is crowded
 
 ### 7. AI Review Mode (UI only)
+
 - AI Review button with persona selection (UI complete)
 - Backend wiring not yet connected (no actual AI review calls)
 - Progress streaming to renderer (scaffolded)
@@ -61,8 +68,10 @@ Last updated: 2026-04-11
 The features below complete the V1 product vision. These are the missing pieces that make Flowrite genuinely usable as a daily writing tool.
 
 ### 2.1 Suggestion & Rewrite UI
+
 **Status:** Backend done (propose_suggestion tool works), UI partial (SuggestionCard.vue exists)
 **What's needed:**
+
 - [ ] Inline diff view showing original vs. proposed text
 - [ ] Accept/reject flow with anchor validation and fuzzy re-anchor
 - [ ] Safety snapshot creation before first acceptance per save cycle
@@ -71,8 +80,10 @@ The features below complete the V1 product vision. These are the missing pieces 
 - [ ] Hover provenance: shows when accepted, from which thread
 
 ### 2.2 Auto-Save
+
 **Status:** Not started. MarkText has manual save only.
 **What's needed:**
+
 - [ ] Debounced auto-save (e.g. 3s after last keystroke, configurable)
 - [ ] Save indicator in title bar (saved/unsaved/saving)
 - [ ] Atomic markdown + sidecar save in one logical transaction
@@ -80,8 +91,10 @@ The features below complete the V1 product vision. These are the missing pieces 
 - [ ] Option to disable auto-save for users who prefer manual control
 
 ### 2.3 Version History UI
+
 **Status:** Backend done (snapshotStore.js creates snapshots), no UI
 **What's needed:**
+
 - [ ] Version history drawer/panel accessible from toolbar
 - [ ] Timeline of snapshots with timestamps and trigger labels
 - [ ] Side-by-side or inline diff viewer between versions
@@ -90,8 +103,10 @@ The features below complete the V1 product vision. These are the missing pieces 
 - [ ] Snapshot creation on meaningful events (AI suggestion accepted, manual save after large edit)
 
 ### 2.4 Open-Source AI Access: Claude API Key Path
+
 **Status:** Partial foundation exists via current runtime settings, but the app still feels too gateway-centric for open-source users.
 **What's needed:**
+
 - [ ] First-class "Use your Claude API key" setup path in onboarding/settings
 - [ ] Provider abstraction in runtime settings so direct Claude access and gateway access are both supported cleanly
 - [ ] Clear provider selection UX: Claude direct, Flowrite gateway, future providers
@@ -108,8 +123,10 @@ The features below complete the V1 product vision. These are the missing pieces 
 The soul of Flowrite. These features transform AI from a generic commenter into a writing companion that knows you.
 
 ### 3.1 Writer Memory System
+
 **Status:** Architecture designed in CLAUDE.md, `save_memory` tool not yet implemented
 **What's needed:**
+
 - [ ] `save_memory` tool implementation in toolRegistry
 - [ ] `~/.flowrite/writer-memory.json` storage (user-level, cross-document)
 - [ ] Memory categories: style, preference, context, fact
@@ -119,8 +136,10 @@ The soul of Flowrite. These features transform AI from a generic commenter into 
 - [ ] "Soulmate commenter" behavior: adapts feedback style to what resonates with the writer
 
 ### 3.2 Memory Management UI
+
 **Status:** Not started (P2 in TODOS.md)
 **What's needed:**
+
 - [ ] Settings panel showing all stored memory entries
 - [ ] Edit/delete individual memories
 - [ ] Memory categories with visual grouping
@@ -129,8 +148,10 @@ The soul of Flowrite. These features transform AI from a generic commenter into 
 - [ ] Token usage indicator (how much of the 4000-token budget is used)
 
 ### 3.3 AI Engineering & Prompt Quality
+
 **Status:** Prompts functional, not yet refined for quality
 **What's needed:**
+
 - [ ] Refined system prompts for comment-first behavior (less generic, more editorial)
 - [ ] Better persona differentiation (friendly/critical/improvement feel too similar currently)
 - [ ] Context-aware commenting: AI references earlier parts of the document, not just the anchor
@@ -141,8 +162,10 @@ The soul of Flowrite. These features transform AI from a generic commenter into 
 - [ ] Prompt caching optimization: measure and reduce API costs
 
 ### 3.4 Agent CLI for Commenting, Discussion, and Rewrite Actions
+
 **Status:** Not started
 **What's needed:**
+
 - [ ] CLI command surface for external agents to target a document without touching markdown directly
 - [ ] Commands for global discussion messages, margin comments, and rewrite/suggestion creation
 - [ ] Anchor input format that supports exact range coordinates plus quote/context fallback
@@ -160,7 +183,9 @@ The soul of Flowrite. These features transform AI from a generic commenter into 
 Making the editor feel like home for serious writers.
 
 ### 4.1 Editor Ambiance & Theming
+
 **What's needed:**
+
 - [ ] Background color temperature control (warm/cool/neutral slider)
 - [ ] Custom accent colors for the writing surface
 - [ ] Dark mode refinement (not just inverted, but designed for long writing sessions)
@@ -170,8 +195,10 @@ Making the editor feel like home for serious writers.
 - [ ] Per-document theme memory
 
 ### 4.2 MarkText Trim & Performance
+
 **Status:** Full MarkText feature set is carried over, much is unused
 **What's needed:**
+
 - [ ] Audit MarkText features: identify what Flowrite writers actually need
 - [ ] Remove or disable unused features:
   - [ ] Source code mode (if not needed for the target user)
@@ -184,7 +211,9 @@ Making the editor feel like home for serious writers.
 - [ ] Muya rendering performance for very long documents (10K+ words)
 
 ### 4.3 Keyboard-First Shortcuts
+
 **What's needed:**
+
 - [ ] `Cmd+Shift+C` — margin comment at current selection
 - [ ] `Cmd+Shift+G` — focus global comment input
 - [ ] `Cmd+Shift+R` — trigger AI review
@@ -192,7 +221,9 @@ Making the editor feel like home for serious writers.
 - [ ] Escape to dismiss/collapse active thread
 
 ### 4.4 Writing Flow Enhancements
+
 **What's needed:**
+
 - [ ] Word count / reading time in status bar
 - [ ] Session writing stats (words written this session, time active)
 - [ ] Focus timer / pomodoro integration (optional, non-intrusive)
@@ -206,12 +237,14 @@ Making the editor feel like home for serious writers.
 Getting Flowrite into writers' hands.
 
 ### 5.1 Landing Page & Website
+
 - [ ] Product landing page explaining the "thinking editor" concept
 - [ ] Demo video / interactive preview
 - [ ] Download links for macOS (primary), Windows, Linux
 - [ ] Blog / changelog for updates
 
 ### 5.2 Security & Authentication
+
 - [ ] OAuth for future cloud features (Google, GitHub)
 - [ ] End-to-end encrypted sync (if cloud sync is added)
 - [ ] API key management improvements (multiple keys, usage tracking)
@@ -219,6 +252,7 @@ Getting Flowrite into writers' hands.
 - [ ] Code signing and notarization for macOS distribution
 
 ### 5.3 Distribution & Updates
+
 - [ ] Auto-updater (Electron autoUpdater or electron-updater)
 - [ ] DMG/installer packaging for macOS
 - [ ] Windows installer (NSIS or MSI)
@@ -232,21 +266,25 @@ Getting Flowrite into writers' hands.
 Long-term ideas, not committed. Evaluate after V1 ships.
 
 ### 6.1 Ambient AI Companion
+
 - Always-on gentle observations while writing (V2 direction from design.md)
 - Non-intrusive: appears only when AI notices something worth flagging
 - Requires solving interruption timing, trust, and UI placement
 
 ### 6.2 Multi-Document Intelligence
+
 - Project-level context: AI understands relationships between documents
 - Cross-document references and consistency checking
 - `read_file` / `search_files` tools scoped to project directory
 
 ### 6.3 Cloud & Collaboration
+
 - Optional cloud sync for documents + Flowrite metadata
 - Shared commenting between trusted collaborators
 - Publishing pipeline (export to blog, newsletter, etc.)
 
 ### 6.4 Vue 3 Migration
+
 - Vue 2 EOL migration to Vue 3 + Pinia (P3 in TODOS.md)
 - Should happen during a feature freeze
 - Effort: XL (multi-quarter)
