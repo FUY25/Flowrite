@@ -47,9 +47,18 @@ const TOOL_SETS = {
   [JOB_TYPE_REQUEST_SUGGESTION]: ['propose_suggestion']
 }
 
+const TOOLS_BY_NAME = FLOWRITE_TOOLS.reduce((lookup, tool) => {
+  lookup[tool.name] = Object.freeze(tool)
+  return lookup
+}, {})
+
+const TOOLS_BY_JOB_TYPE = Object.keys(TOOL_SETS).reduce((lookup, jobType) => {
+  lookup[jobType] = Object.freeze(
+    TOOL_SETS[jobType].map(name => TOOLS_BY_NAME[name]).filter(Boolean)
+  )
+  return lookup
+}, {})
+
 export const getFlowriteTools = (jobType = JOB_TYPE_THREAD_REPLY) => {
-  const enabledTools = TOOL_SETS[jobType] || TOOL_SETS[JOB_TYPE_THREAD_REPLY]
-  return FLOWRITE_TOOLS
-    .filter(tool => enabledTools.includes(tool.name))
-    .map(tool => ({ ...tool }))
+  return TOOLS_BY_JOB_TYPE[jobType] || TOOLS_BY_JOB_TYPE[JOB_TYPE_THREAD_REPLY]
 }

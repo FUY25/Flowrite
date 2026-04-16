@@ -1,11 +1,10 @@
 import { ANCHOR_ATTACHED, ANCHOR_DETACHED } from '../constants'
+import { isPlainObject } from '../objectUtils'
 
 const DEFAULT_CONTEXT_RADIUS = 24
 const MIN_FUZZY_SCORE = 0.72
 const STRONG_FUZZY_SCORE = 0.84
 const MIN_FUZZY_MARGIN = 0.08
-
-const isPlainObject = value => value != null && typeof value === 'object' && !Array.isArray(value)
 
 const clamp = (value, min, max) => {
   return Math.max(min, Math.min(max, value))

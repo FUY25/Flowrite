@@ -43,8 +43,19 @@
 <script>
 import { mapState } from 'vuex'
 import { resolveMarginThread } from '../../../flowrite/anchors'
-import { ANCHOR_DETACHED, SCOPE_MARGIN } from '../../../flowrite/constants'
+import { SCOPE_MARGIN } from '../../../flowrite/constants'
+import { FLOWRITE_MARGIN_THREAD_COMPOSER_ID } from '../../../flowrite/commentUi'
 import { buildMarginLayout } from './marginLayout'
+import {
+  bindMarginViewportListeners,
+  createEmptyParagraphIndex,
+  getMarginEditorContainer,
+  getMarginEditorContainerRect,
+  getMarginThreadRefreshKey,
+  resolveComposerThreadId,
+  resolveMarginParagraphIndex,
+  resolveMarginThreadVerticalPosition
+} from './marginShared'
 import MarginThreadCard from './MarginThreadCard.vue'
 import MarginThreadComposer from './MarginThreadComposer.vue'
 
@@ -64,10 +75,7 @@ export default {
     },
     paragraphIndex: {
       type: Object,
-      default: () => ({
-        list: [],
-        byId: new Map()
-      })
+      default: createEmptyParagraphIndex
     }
   },
   data () {
@@ -77,9 +85,7 @@ export default {
       threadPositionCache: {},
       railHeight: 0,
       rafId: null,
-      resizeObserver: null,
-      resizeListener: null,
-      scrollContainer: null
+      viewportBinding: null
     }
   },
   computed: {
@@ -95,14 +101,21 @@ export default {
       return Array.isArray(this.comments)
         ? this.comments.filter(thread => thread && thread.scope === SCOPE_MARGIN)
         : []
+    },
+
+    marginThreadRefreshKey () {
+      return getMarginThreadRefreshKey(this.marginThreads)
+    },
+
+    composerThreadRefreshKey () {
+      return this.composerMarginThread
+        ? getMarginThreadRefreshKey([this.composerMarginThread])
+        : ''
     }
   },
   watch: {
-    comments: {
-      deep: true,
-      handler () {
-        this.scheduleRefresh()
-      }
+    marginThreadRefreshKey () {
+      this.scheduleRefresh()
     },
 
     markdown () {
@@ -124,6 +137,10 @@ export default {
 
     activeMarginThreadId () {
       this.scheduleRefresh()
+    },
+
+    composerThreadRefreshKey () {
+      this.scheduleRefresh()
     }
   },
   mounted () {
@@ -138,124 +155,15 @@ export default {
     }
   },
   methods: {
-    getEditorContainer () {
-      const root = this.getEditorShell()
-      if (!root) {
-        return null
-      }
-
-      return root.querySelector('.editor-component')
-    },
-
-    getEditorShell () {
-      if (this.editorRoot) {
-        return this.editorRoot
-      }
-
-      if (this.$el && typeof this.$el.closest === 'function') {
-        return this.$el.closest('.editor-main') || this.$el.parentElement || null
-      }
-
-      return this.$el ? this.$el.parentElement : null
-    },
-
-    getRailElement () {
-      return this.$refs.threadRail || null
-    },
-
-    getEditorContainerRect () {
-      const container = this.getEditorContainer()
-      return container ? container.getBoundingClientRect() : null
-    },
-
-    buildFallbackParagraphIndex () {
-      const root = this.getEditorShell()
-      if (!root) {
-        return {
-          list: [],
-          byId: new Map()
-        }
-      }
-
-      const list = Array.from(root.querySelectorAll('#ag-editor-id .ag-paragraph[id]')).map(element => ({
-        id: element.id,
-        text: element.textContent || '',
-        element
-      }))
-
-      return {
-        list,
-        byId: new Map(list.map(paragraph => [paragraph.id, paragraph]))
-      }
-    },
-
-    getParagraphIndex () {
-      return this.paragraphIndex && Array.isArray(this.paragraphIndex.list) && this.paragraphIndex.list.length
-        ? this.paragraphIndex
-        : this.buildFallbackParagraphIndex()
-    },
-
-    getFallbackThreadTop (threadId, editorRect, editorContainer, paragraphIndex) {
-      const cachedTop = this.threadPositionCache[threadId]
-      if (Number.isFinite(cachedTop)) {
-        return cachedTop
-      }
-
-      const fallbackParagraph = Array.isArray(paragraphIndex && paragraphIndex.list) && paragraphIndex.list.length
-        ? paragraphIndex.list[0]
-        : null
-      const fallbackRect = fallbackParagraph && fallbackParagraph.element
-        ? fallbackParagraph.element.getBoundingClientRect()
-        : null
-
-      if (!fallbackRect || !editorRect || !editorContainer) {
-        return 0
-      }
-
-      return Math.max(0, fallbackRect.top - editorRect.top + editorContainer.scrollTop + DOT_VERTICAL_OFFSET)
-    },
-
     resolveThreadPosition (thread, paragraphIndex, editorRect, editorContainer) {
-      const resolution = thread.resolvedAnchor || {}
-      const ranges = Array.isArray(resolution.ranges) && resolution.ranges.length
-        ? resolution.ranges
-        : [{
-          paragraphId: resolution.paragraphId || resolution.startParagraphId || (thread.anchor && thread.anchor.start ? thread.anchor.start.key : ''),
-          startOffset: Number.isFinite(resolution.startOffset)
-            ? resolution.startOffset
-            : (thread.anchor && thread.anchor.start ? thread.anchor.start.offset : 0),
-          endOffset: Number.isFinite(resolution.endOffset)
-            ? resolution.endOffset
-            : (thread.anchor && thread.anchor.end ? thread.anchor.end.offset : 0)
-        }]
-
-      const firstRange = ranges[0]
-      if (!firstRange || !editorRect || !editorContainer) {
-        return null
-      }
-
-      const paragraph = paragraphIndex.byId.get(firstRange.paragraphId)
-      const rect = paragraph && paragraph.element
-        ? paragraph.element.getBoundingClientRect()
-        : null
-
-      if (!rect) {
-        if (resolution.status !== ANCHOR_DETACHED) {
-          return null
-        }
-
-        return {
-          top: this.getFallbackThreadTop(thread.id, editorRect, editorContainer, paragraphIndex),
-          status: resolution.status || '',
-          detached: true
-        }
-      }
-
-      return {
-        top: Math.max(0, rect.top - editorRect.top + editorContainer.scrollTop + DOT_VERTICAL_OFFSET),
-        status: resolution.status || '',
-        detached: resolution.status === ANCHOR_DETACHED
-      }
+      return resolveMarginThreadVerticalPosition({
+        thread,
+        paragraphIndex,
+        editorRect,
+        editorContainer,
+        positionCache: this.threadPositionCache,
+        verticalOffset: DOT_VERTICAL_OFFSET
+      })
     },
 
     estimateThreadHeight (thread) {
@@ -271,15 +179,15 @@ export default {
     },
 
     refreshResolvedThreads () {
-      const editorContainer = this.getEditorContainer()
-      const editorRect = this.getEditorContainerRect()
+      const editorContainer = getMarginEditorContainer(this)
+      const editorRect = getMarginEditorContainerRect(this)
       if (!editorRect || !editorContainer) {
         this.positionedThreads = []
         this.railHeight = 0
         return
       }
 
-      const paragraphIndex = this.getParagraphIndex()
+      const paragraphIndex = resolveMarginParagraphIndex(this, this.paragraphIndex)
       const threads = this.marginThreads
         .map((thread, order) => {
           const resolvedThread = resolveMarginThread(thread, paragraphIndex.list)
@@ -306,12 +214,12 @@ export default {
         if (composerPosition) {
           threads.push({
             ...resolvedComposer,
-            id: this.composerMarginThread.id || 'flowrite-margin-thread-composer',
+            id: resolveComposerThreadId(this.composerMarginThread.id),
             order: threads.length,
             active: true,
             naturalTop: composerPosition.top,
             messageCount: 0,
-            height: this.threadHeights['flowrite-margin-thread-composer'] || this.estimateThreadHeight(resolvedComposer),
+            height: this.threadHeights[FLOWRITE_MARGIN_THREAD_COMPOSER_ID] || this.estimateThreadHeight(resolvedComposer),
             isDetached: false,
             isComposer: true
           })
@@ -380,40 +288,18 @@ export default {
 
     attachListeners () {
       this.detachListeners()
-
-      this.resizeListener = () => {
-        this.scheduleRefresh()
-      }
-      window.addEventListener('resize', this.resizeListener)
-
-      const container = this.getEditorContainer()
-      if (container) {
-        this.scrollContainer = container
-
-        if (typeof ResizeObserver !== 'undefined') {
-          this.resizeObserver = new ResizeObserver(() => {
-            this.scheduleRefresh()
-          })
-          this.resizeObserver.observe(container)
+      this.viewportBinding = bindMarginViewportListeners(this, {
+        onRefresh: () => {
+          this.scheduleRefresh()
         }
-      }
+      })
     },
 
     detachListeners () {
-      if (this.resizeListener) {
-        window.removeEventListener('resize', this.resizeListener)
-        this.resizeListener = null
+      if (this.viewportBinding) {
+        this.viewportBinding.teardown()
+        this.viewportBinding = null
       }
-
-      if (this.resizeObserver) {
-        this.resizeObserver.disconnect()
-        this.resizeObserver = null
-      }
-      this.scrollContainer = null
-    },
-
-    isDetached (thread) {
-      return Boolean(thread && thread.resolvedAnchor && thread.resolvedAnchor.status === ANCHOR_DETACHED)
     },
 
     activateThread (threadId) {

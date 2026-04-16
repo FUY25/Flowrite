@@ -6,16 +6,34 @@
 import { mapState } from 'vuex'
 import { resolveMarginThread } from '../../../flowrite/anchors'
 import { SCOPE_MARGIN, ANCHOR_DETACHED } from '../../../flowrite/constants'
+import {
+  bindMarginViewportListeners,
+  createEmptyParagraphIndex,
+  getIdListRefreshKey,
+  getMarginThreadRefreshKey,
+  getResolvedMarginRanges,
+  resolveMarginParagraphIndex
+} from './marginShared'
 const ACTIVE_HIGHLIGHT_NAME = 'flowrite-margin-anchor-active'
 const UNDERLINE_HIGHLIGHT_NAME = 'flowrite-margin-anchor-underline'
 
-const supportsCssHighlights = () => {
-  return typeof window !== 'undefined' &&
-    typeof window.Highlight === 'function' &&
-    typeof CSS !== 'undefined' &&
-    CSS.highlights &&
-    typeof CSS.highlights.set === 'function'
-}
+const supportsCssHighlights = (() => {
+  let cached = null
+
+  return () => {
+    if (typeof cached === 'boolean') {
+      return cached
+    }
+
+    cached = typeof window !== 'undefined' &&
+      typeof window.Highlight === 'function' &&
+      typeof CSS !== 'undefined' &&
+      CSS.highlights &&
+      typeof CSS.highlights.set === 'function'
+
+    return cached
+  }
+})()
 
 const createRangeFromParagraph = (paragraph, startOffset, endOffset) => {
   if (!paragraph || typeof document === 'undefined') {
@@ -64,20 +82,14 @@ export default {
     },
     paragraphIndex: {
       type: Object,
-      default: () => ({
-        list: [],
-        byId: new Map()
-      })
+      default: createEmptyParagraphIndex
     }
   },
   data () {
     return {
       interactiveRanges: [],
       rafId: null,
-      scrollContainer: null,
-      resizeObserver: null,
-      resizeListener: null,
-      clickListener: null
+      viewportBinding: null
     }
   },
   computed: {
@@ -109,14 +121,22 @@ export default {
         ...(this.highlightedMarginThreadIds || []),
         this.activeMarginThreadId
       ].filter(Boolean))
+    },
+
+    renderedThreadsRefreshKey () {
+      return getMarginThreadRefreshKey(this.renderedThreads)
+    },
+
+    highlightedThreadIdsKey () {
+      return getIdListRefreshKey([
+        ...(this.highlightedMarginThreadIds || []),
+        this.activeMarginThreadId
+      ])
     }
   },
   watch: {
-    comments: {
-      deep: true,
-      handler () {
-        this.scheduleRefresh()
-      }
+    renderedThreadsRefreshKey () {
+      this.scheduleRefresh()
     },
     markdown () {
       this.scheduleRefresh()
@@ -131,20 +151,11 @@ export default {
     showAnnotationsPane () {
       this.scheduleRefresh()
     },
-    composerMarginThread: {
-      deep: true,
-      handler () {
-        this.scheduleRefresh()
-      }
-    },
     activeMarginThreadId () {
       this.scheduleRefresh()
     },
-    highlightedMarginThreadIds: {
-      deep: true,
-      handler () {
-        this.scheduleRefresh()
-      }
+    highlightedThreadIdsKey () {
+      this.scheduleRefresh()
     }
   },
   mounted () {
@@ -160,61 +171,6 @@ export default {
     }
   },
   methods: {
-    getEditorContainer () {
-      const root = this.getEditorShell()
-      if (!root) {
-        return null
-      }
-
-      return root.querySelector('.editor-component')
-    },
-
-    getEditorShell () {
-      if (this.editorRoot) {
-        return this.editorRoot
-      }
-
-      if (this.$el && typeof this.$el.closest === 'function') {
-        return this.$el.closest('.editor-main') || this.$el.parentElement || null
-      }
-
-      if (typeof document !== 'undefined') {
-        const shell = document.querySelector('.editor-main')
-        if (shell) {
-          return shell
-        }
-      }
-
-      return this.$el ? this.$el.parentElement : null
-    },
-
-    buildFallbackParagraphIndex () {
-      const root = this.getEditorShell()
-      if (!root) {
-        return {
-          list: [],
-          byId: new Map()
-        }
-      }
-
-      const list = Array.from(root.querySelectorAll('#ag-editor-id .ag-paragraph[id]')).map(element => ({
-        id: element.id,
-        text: element.textContent || '',
-        element
-      }))
-
-      return {
-        list,
-        byId: new Map(list.map(paragraph => [paragraph.id, paragraph]))
-      }
-    },
-
-    getParagraphIndex () {
-      return this.paragraphIndex && Array.isArray(this.paragraphIndex.list) && this.paragraphIndex.list.length
-        ? this.paragraphIndex
-        : this.buildFallbackParagraphIndex()
-    },
-
     createThreadRange (paragraphIndex, paragraphId, startOffset, endOffset) {
       const paragraph = paragraphIndex.byId.get(paragraphId)
       if (!paragraph) {
@@ -226,17 +182,7 @@ export default {
 
     buildThreadRanges (thread, paragraphIndex) {
       const resolution = thread.resolvedAnchor || {}
-      const ranges = Array.isArray(resolution.ranges) && resolution.ranges.length
-        ? resolution.ranges
-        : [{
-          paragraphId: resolution.paragraphId || resolution.startParagraphId || (thread.anchor && thread.anchor.start ? thread.anchor.start.key : ''),
-          startOffset: Number.isFinite(resolution.startOffset)
-            ? resolution.startOffset
-            : (thread.anchor && thread.anchor.start ? thread.anchor.start.offset : 0),
-          endOffset: Number.isFinite(resolution.endOffset)
-            ? resolution.endOffset
-            : (thread.anchor && thread.anchor.end ? thread.anchor.end.offset : 0)
-        }]
+      const ranges = getResolvedMarginRanges(thread)
 
       return ranges
         .map((rangeEntry, index) => {
@@ -276,14 +222,14 @@ export default {
     },
 
     refreshResolvedThreads () {
-      const editorContainer = this.getEditorContainer()
+      const editorContainer = this.viewportBinding ? this.viewportBinding.container : null
       if (!editorContainer) {
         this.interactiveRanges = []
         this.clearNativeHighlights()
         return
       }
 
-      const paragraphIndex = this.getParagraphIndex()
+      const paragraphIndex = resolveMarginParagraphIndex(this, this.paragraphIndex)
       const resolvedThreads = this.renderedThreads
         .map(thread => resolveMarginThread(thread, paragraphIndex.list))
 
@@ -321,77 +267,55 @@ export default {
     attachListeners () {
       this.detachListeners()
 
-      this.resizeListener = () => {
-        this.scheduleRefresh()
-      }
-      window.addEventListener('resize', this.resizeListener)
+      const clickListener = event => {
+        const caretRange = typeof document.caretRangeFromPoint === 'function'
+          ? document.caretRangeFromPoint(event.clientX, event.clientY)
+          : null
+        const caretPosition = !caretRange && typeof document.caretPositionFromPoint === 'function'
+          ? document.caretPositionFromPoint(event.clientX, event.clientY)
+          : null
+        const node = caretRange
+          ? caretRange.startContainer
+          : (caretPosition ? caretPosition.offsetNode : null)
+        const offset = caretRange
+          ? caretRange.startOffset
+          : (caretPosition ? caretPosition.offset : null)
 
-      const container = this.getEditorContainer()
-      if (container) {
-        this.scrollContainer = container
-
-        this.clickListener = event => {
-          const caretRange = typeof document.caretRangeFromPoint === 'function'
-            ? document.caretRangeFromPoint(event.clientX, event.clientY)
-            : null
-          const caretPosition = !caretRange && typeof document.caretPositionFromPoint === 'function'
-            ? document.caretPositionFromPoint(event.clientX, event.clientY)
-            : null
-          const node = caretRange
-            ? caretRange.startContainer
-            : (caretPosition ? caretPosition.offsetNode : null)
-          const offset = caretRange
-            ? caretRange.startOffset
-            : (caretPosition ? caretPosition.offset : null)
-
-          if (!node || !Number.isFinite(offset)) {
-            return
-          }
-
-          const match = this.interactiveRanges.find(entry => {
-            if (!entry || !entry.range || typeof entry.range.comparePoint !== 'function') {
-              return false
-            }
-
-            try {
-              return entry.range.comparePoint(node, offset) === 0
-            } catch (error) {
-              return false
-            }
-          })
-
-          if (match) {
-            event.preventDefault()
-            this.activateThread(match.threadId)
-          }
+        if (!node || !Number.isFinite(offset)) {
+          return
         }
 
-        container.addEventListener('click', this.clickListener, true)
+        const match = this.interactiveRanges.find(entry => {
+          if (!entry || !entry.range || typeof entry.range.comparePoint !== 'function') {
+            return false
+          }
 
-        if (typeof ResizeObserver !== 'undefined') {
-          this.resizeObserver = new ResizeObserver(() => {
-            this.scheduleRefresh()
-          })
-          this.resizeObserver.observe(container)
+          try {
+            return entry.range.comparePoint(node, offset) === 0
+          } catch (error) {
+            return false
+          }
+        })
+
+        if (match) {
+          event.preventDefault()
+          this.activateThread(match.threadId)
         }
       }
+
+      this.viewportBinding = bindMarginViewportListeners(this, {
+        onRefresh: () => {
+          this.scheduleRefresh()
+        },
+        onClickCapture: clickListener
+      })
     },
 
     detachListeners () {
-      if (this.resizeListener) {
-        window.removeEventListener('resize', this.resizeListener)
-        this.resizeListener = null
+      if (this.viewportBinding) {
+        this.viewportBinding.teardown()
+        this.viewportBinding = null
       }
-
-      if (this.scrollContainer && this.clickListener) {
-        this.scrollContainer.removeEventListener('click', this.clickListener, true)
-      }
-      if (this.resizeObserver) {
-        this.resizeObserver.disconnect()
-        this.resizeObserver = null
-      }
-      this.scrollContainer = null
-      this.clickListener = null
     },
 
     activateThread (threadId) {
