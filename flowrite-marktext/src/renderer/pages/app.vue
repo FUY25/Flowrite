@@ -36,7 +36,7 @@
 </template>
 
 <script>
-import { addStyles, addThemeStyle } from '@/util/theme'
+import { addStyles } from '@/util/theme'
 import Recent from '@/components/recent'
 import EditorWithTabs from '@/components/editorWithTabs'
 import TitleBar from '@/components/titleBar'
@@ -50,7 +50,6 @@ import ImportModal from '@/components/import'
 import { loadingPageMixins } from '@/mixins'
 import { mapState } from 'vuex'
 import bus from '@/bus'
-import { DEFAULT_STYLE } from '@/config'
 import { ipcRenderer } from 'electron'
 
 export default {
@@ -76,6 +75,10 @@ export default {
     ...mapState({
       sourceCode: state => state.preferences.sourceCode,
       theme: state => state.preferences.theme,
+      codeFontFamily: state => state.preferences.codeFontFamily,
+      codeFontSize: state => state.preferences.codeFontSize,
+      hideScrollbar: state => state.preferences.hideScrollbar,
+      workspaceBackgroundWarmth: state => state.preferences.workspaceBackgroundWarmth,
       textDirection: state => state.preferences.textDirection
     }),
     ...mapState({
@@ -98,10 +101,11 @@ export default {
     }
   },
   watch: {
-    theme: function (value, oldValue) {
-      if (value !== oldValue) {
-        addThemeStyle(value)
-      }
+    theme () {
+      this.refreshStyles()
+    },
+    workspaceBackgroundWarmth () {
+      this.refreshStyles()
     },
     zoom: function (zoom) {
       ipcRenderer.emit('mt::window-zoom', null, zoom)
@@ -190,10 +194,20 @@ export default {
     }, false)
 
     this.$nextTick(() => {
-      const style = global.marktext.initialState || DEFAULT_STYLE
-      addStyles(style)
+      this.refreshStyles()
       this.hideLoadingPage()
     })
+  },
+  methods: {
+    refreshStyles () {
+      addStyles({
+        theme: this.theme,
+        codeFontFamily: this.codeFontFamily,
+        codeFontSize: this.codeFontSize,
+        hideScrollbar: this.hideScrollbar,
+        workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
+      })
+    }
   }
 }
 </script>
@@ -218,7 +232,7 @@ export default {
     left: -10000px;
   }
   .editor-placeholder {
-    background: var(--editorBgColor);
+    background: var(--workspaceBgColor);
   }
   .editor-middle {
     display: flex;

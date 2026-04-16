@@ -129,7 +129,7 @@ export default {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--editorBgColor);
+    background: var(--workspaceBgColor);
     & > .container {
       flex: 1;
       min-height: 0;

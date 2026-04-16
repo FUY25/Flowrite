@@ -314,7 +314,7 @@ export default {
 
 <style scoped>
   .flowrite-global-comments {
-    background: var(--editorBgColor);
+    background: var(--workspacePanelBgColor);
     padding: 0 22px 18px;
     transition: padding .18s ease;
   }
@@ -378,7 +378,7 @@ export default {
     width: 30px;
     height: 30px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--editorBgColor) 78%, var(--themeColor) 22%);
+    background: color-mix(in srgb, var(--workspacePanelBgColor) 78%, var(--themeColor) 22%);
     border: 1px solid rgba(28, 33, 44, 0.06);
     display: inline-flex;
     align-items: center;
@@ -430,7 +430,7 @@ export default {
     padding: 0 6px 0 12px;
     border: 1px solid rgba(28, 33, 44, 0.11);
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.6);
+    background: color-mix(in srgb, var(--workspacePanelBgColor) 92%, white 8%);
   }
 
   .flowrite-global-comments__empty {

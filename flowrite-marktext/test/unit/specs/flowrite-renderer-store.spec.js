@@ -1,22 +1,42 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
 import { expect } from 'chai'
-import { ipcRenderer as electronIpcRenderer } from 'electron'
-import flowriteModule, {
-  createDefaultFlowriteState,
-  registerFlowriteLifecycle
-} from '../../../src/renderer/store/modules/flowrite.js'
-import preferencesModule from '../../../src/renderer/store/preferences.js'
+import { createRequire } from 'module'
 
-Vue.use(Vuex)
+const require = createRequire(import.meta.url)
 
-const ipcRenderer = electronIpcRenderer || {
+const ipcRenderer = {
   invoke: async () => {
     throw new Error('Unexpected ipcRenderer.invoke call in test.')
   },
   on: () => {},
   send: () => {}
 }
+
+const electronEntry = require.resolve('electron')
+const originalElectronCacheEntry = require.cache[electronEntry]
+require.cache[electronEntry] = {
+  id: electronEntry,
+  filename: electronEntry,
+  loaded: true,
+  exports: { ipcRenderer }
+}
+
+const flowriteStoreModule = require('../../../src/renderer/store/modules/flowrite.js')
+const preferencesModule = require('../../../src/renderer/store/preferences.js').default
+const flowriteModule = flowriteStoreModule.default
+const {
+  createDefaultFlowriteState,
+  registerFlowriteLifecycle
+} = flowriteStoreModule
+
+if (originalElectronCacheEntry) {
+  require.cache[electronEntry] = originalElectronCacheEntry
+} else {
+  delete require.cache[electronEntry]
+}
+
+Vue.use(Vuex)
 
 const createPreferencesState = (flowrite = {}) => ({
   workspaceBackgroundWarmth: 0,

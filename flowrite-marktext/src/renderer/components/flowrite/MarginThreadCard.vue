@@ -461,7 +461,7 @@ export default {
     position: relative;
     border: 1px solid rgba(52, 60, 72, 0.11);
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.96);
+    background: color-mix(in srgb, var(--workspacePanelBgColor) 96%, white 4%);
     box-shadow: 0 8px 22px rgba(26, 33, 44, 0.06);
     padding: 14px 16px 14px;
     cursor: pointer;
@@ -529,7 +529,7 @@ export default {
     width: 28px;
     height: 28px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.98);
+    background: color-mix(in srgb, var(--workspacePanelBgColor) 96%, white 4%);
     border: 1px solid rgba(217, 222, 230, 0.96);
     display: inline-flex;
     align-items: center;
@@ -635,7 +635,7 @@ export default {
     appearance: none;
     border: none;
     border-radius: 999px;
-    background: rgba(236, 239, 244, 0.98);
+    background: color-mix(in srgb, var(--workspacePanelBgColor) 92%, rgba(236, 239, 244, 0.98) 8%);
     color: rgba(126, 132, 145, 0.96);
     cursor: pointer;
     flex-shrink: 0;
