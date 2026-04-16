@@ -36,6 +36,8 @@ describe('Workspace warmth utility', function () {
     expect(css).to.include('#f4ead8')
     expect(css).to.include('color-mix(in srgb')
     expect(css).to.include('--workspaceBgColor:')
+    expect(css).to.include('--workspacePanelBgColor:')
+    expect(css).to.include('--workspaceHeaderBgColor:')
   })
 
   it('uses darker warm targets for dark themes', function () {
@@ -46,5 +48,15 @@ describe('Workspace warmth utility', function () {
 
     expect(css).to.include('#3a332d')
     expect(css).to.include('--workspacePanelBgColor:')
+  })
+
+  it('keeps sidebar colors separate from workspace warmth variables', function () {
+    const css = buildWorkspaceWarmthCss({
+      theme: 'light',
+      workspaceBackgroundWarmth: 60
+    })
+
+    expect(css).to.include('--workspaceBgColor:')
+    expect(css).to.not.include('--sideBarBgColor')
   })
 })

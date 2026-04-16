@@ -1,5 +1,6 @@
 import { THEME_STYLE_ID, COMMON_STYLE_ID, DEFAULT_CODE_FONT_FAMILY, oneDarkThemes, railscastsThemes } from '../config'
 import { dark, graphite, materialDark, oneDark, ulysses } from './themeColor'
+import { buildWorkspaceWarmthCss } from './workspaceWarmth'
 import { isLinux } from './index'
 import elementStyle from 'element-ui/lib/theme-chalk/index.css'
 
@@ -121,7 +122,7 @@ export const setEditorWidth = value => {
 }
 
 export const addCommonStyle = options => {
-  const { codeFontFamily, codeFontSize, hideScrollbar } = options
+  const { codeFontFamily, codeFontSize, hideScrollbar, theme, workspaceBackgroundWarmth } = options
   let sheet = document.querySelector(`#${COMMON_STYLE_ID}`)
   if (!sheet) {
     sheet = document.createElement('style')
@@ -146,6 +147,7 @@ font-family: ${codeFontFamily}, ${DEFAULT_CODE_FONT_FAMILY};
 font-size: ${codeFontSize}px;
 }
 
+${buildWorkspaceWarmthCss({ theme, workspaceBackgroundWarmth })}
 ${getEmojiPickerPatch()}
 `
 }
