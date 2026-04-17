@@ -1,4 +1,6 @@
-import ced from 'ced'
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
 
 const CED_ICONV_ENCODINGS = {
   'BIG5-CP950': 'big5',
@@ -23,11 +25,45 @@ const BOM_ENCODINGS = {
   utf16le: [0xFF, 0xFE]
 }
 
+let cachedCedDetector
+let hasResolvedCedDetector = false
+
 const checkSequence = (buffer, sequence) => {
   if (buffer.length < sequence.length) {
     return false
   }
   return sequence.every((v, i) => v === buffer[i])
+}
+
+const resolveCedDetector = () => {
+  if (hasResolvedCedDetector) {
+    return cachedCedDetector
+  }
+
+  hasResolvedCedDetector = true
+
+  try {
+    const cedModule = require('ced')
+    cachedCedDetector = typeof cedModule === 'function'
+      ? cedModule
+      : (cedModule && typeof cedModule.default === 'function' ? cedModule.default : null)
+  } catch (error) {
+    cachedCedDetector = null
+  }
+
+  return cachedCedDetector
+}
+
+const normalizeDetectedEncoding = detectedEncoding => {
+  if (typeof detectedEncoding !== 'string' || detectedEncoding.length === 0) {
+    return 'utf8'
+  }
+
+  if (CED_ICONV_ENCODINGS[detectedEncoding]) {
+    return CED_ICONV_ENCODINGS[detectedEncoding]
+  }
+
+  return detectedEncoding.toLowerCase().replace(/-_/g, '')
 }
 
 /**
@@ -37,7 +73,7 @@ const checkSequence = (buffer, sequence) => {
  * @param {boolean} autoGuessEncoding
  * @returns {Encoding}
  */
-export const guessEncoding = (buffer, autoGuessEncoding) => {
+export const createEncodingGuesser = ({ resolveCedDetector: getCedDetector = resolveCedDetector } = {}) => (buffer, autoGuessEncoding) => {
   let isBom = false
   let encoding = 'utf8'
 
@@ -63,12 +99,23 @@ export const guessEncoding = (buffer, autoGuessEncoding) => {
 
   // Auto guess encoding, otherwise use UTF8.
   if (autoGuessEncoding) {
-    encoding = ced(buffer)
-    if (CED_ICONV_ENCODINGS[encoding]) {
-      encoding = CED_ICONV_ENCODINGS[encoding]
-    } else {
-      encoding = encoding.toLowerCase().replace(/-_/g, '')
+    let cedDetector = null
+
+    try {
+      cedDetector = getCedDetector()
+    } catch (error) {
+      cedDetector = null
+    }
+
+    if (typeof cedDetector === 'function') {
+      try {
+        encoding = normalizeDetectedEncoding(cedDetector(buffer))
+      } catch (error) {
+        encoding = 'utf8'
+      }
     }
   }
   return { encoding, isBom }
 }
+
+export const guessEncoding = createEncodingGuesser()

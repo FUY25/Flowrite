@@ -3,9 +3,7 @@ import Vuex from 'vuex'
 import { expect } from 'chai'
 import { createRequire } from 'module'
 
-const require = createRequire(import.meta.url)
-
-const ipcRenderer = {
+let ipcRenderer = {
   invoke: async () => {
     throw new Error('Unexpected ipcRenderer.invoke call in test.')
   },
@@ -13,30 +11,61 @@ const ipcRenderer = {
   send: () => {}
 }
 
-const electronEntry = require.resolve('electron')
-const originalElectronCacheEntry = require.cache[electronEntry]
-require.cache[electronEntry] = {
-  id: electronEntry,
-  filename: electronEntry,
-  loaded: true,
-  exports: { ipcRenderer }
-}
-
-const flowriteStoreModule = require('../../../src/renderer/store/modules/flowrite.js')
-const preferencesModule = require('../../../src/renderer/store/preferences.js').default
-const flowriteModule = flowriteStoreModule.default
-const {
-  createDefaultFlowriteState,
-  registerFlowriteLifecycle
-} = flowriteStoreModule
-
-if (originalElectronCacheEntry) {
-  require.cache[electronEntry] = originalElectronCacheEntry
-} else {
-  delete require.cache[electronEntry]
-}
+let preferencesModule
+let flowriteModule
+let createDefaultFlowriteState
+let registerFlowriteLifecycle
 
 Vue.use(Vuex)
+
+const isKarmaRuntime = () => {
+  return typeof window !== 'undefined' && Boolean(window.__karma__)
+}
+
+const loadFlowriteStoreModules = async () => {
+  if (isKarmaRuntime()) {
+    const electronModule = await import('electron')
+    ipcRenderer = electronModule.ipcRenderer
+
+    const flowriteStoreModule = await import('../../../src/renderer/store/modules/flowrite.js')
+    const preferencesStoreModule = await import('../../../src/renderer/store/preferences.js')
+
+    return {
+      preferencesModule: preferencesStoreModule.default,
+      flowriteModule: flowriteStoreModule.default,
+      createDefaultFlowriteState: flowriteStoreModule.createDefaultFlowriteState,
+      registerFlowriteLifecycle: flowriteStoreModule.registerFlowriteLifecycle
+    }
+  }
+
+  const require = createRequire(import.meta.url)
+  const electronEntry = require.resolve('electron')
+  const originalElectronCacheEntry = require.cache[electronEntry]
+  require.cache[electronEntry] = {
+    id: electronEntry,
+    filename: electronEntry,
+    loaded: true,
+    exports: { ipcRenderer }
+  }
+
+  try {
+    const flowriteStoreModule = require('../../../src/renderer/store/modules/flowrite.js')
+    const preferencesStoreModule = require('../../../src/renderer/store/preferences.js')
+
+    return {
+      preferencesModule: preferencesStoreModule.default,
+      flowriteModule: flowriteStoreModule.default,
+      createDefaultFlowriteState: flowriteStoreModule.createDefaultFlowriteState,
+      registerFlowriteLifecycle: flowriteStoreModule.registerFlowriteLifecycle
+    }
+  } finally {
+    if (originalElectronCacheEntry) {
+      require.cache[electronEntry] = originalElectronCacheEntry
+    } else {
+      delete require.cache[electronEntry]
+    }
+  }
+}
 
 const createPreferencesState = (flowrite = {}) => ({
   workspaceBackgroundWarmth: 0,
@@ -98,10 +127,21 @@ const flushPromises = async () => {
 }
 
 describe('Flowrite renderer store', function () {
-  const originalInvoke = ipcRenderer.invoke
-  const originalOn = ipcRenderer.on
-  const originalSend = ipcRenderer.send
+  let originalInvoke
+  let originalOn
+  let originalSend
   let listeners
+
+  before(async function () {
+    const loadedModules = await loadFlowriteStoreModules()
+    preferencesModule = loadedModules.preferencesModule
+    flowriteModule = loadedModules.flowriteModule
+    createDefaultFlowriteState = loadedModules.createDefaultFlowriteState
+    registerFlowriteLifecycle = loadedModules.registerFlowriteLifecycle
+    originalInvoke = ipcRenderer.invoke
+    originalOn = ipcRenderer.on
+    originalSend = ipcRenderer.send
+  })
 
   beforeEach(function () {
     listeners = new Map()

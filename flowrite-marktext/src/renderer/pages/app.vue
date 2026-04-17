@@ -36,7 +36,7 @@
 </template>
 
 <script>
-import { addStyles } from '@/util/theme'
+import { addStyles, addCommonStyle } from '@/util/theme'
 import Recent from '@/components/recent'
 import EditorWithTabs from '@/components/editorWithTabs'
 import TitleBar from '@/components/titleBar'
@@ -105,7 +105,7 @@ export default {
       this.refreshStyles()
     },
     workspaceBackgroundWarmth () {
-      this.refreshStyles()
+      this.refreshCommonStyle()
     },
     zoom: function (zoom) {
       ipcRenderer.emit('mt::window-zoom', null, zoom)
@@ -199,14 +199,20 @@ export default {
     })
   },
   methods: {
-    refreshStyles () {
-      addStyles({
+    getCommonStyleOptions () {
+      return {
         theme: this.theme,
         codeFontFamily: this.codeFontFamily,
         codeFontSize: this.codeFontSize,
         hideScrollbar: this.hideScrollbar,
         workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
-      })
+      }
+    },
+    refreshStyles () {
+      addStyles(this.getCommonStyleOptions())
+    },
+    refreshCommonStyle () {
+      addCommonStyle(this.getCommonStyleOptions())
     }
   }
 }
