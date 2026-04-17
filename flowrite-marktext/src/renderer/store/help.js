@@ -19,6 +19,8 @@ export const defaultFileState = {
   lineEnding: 'lf', // lf or crlf
   trimTrailingNewline: 3,
   adjustLineEndingOnSave: false, // convert editor buffer (LF) to CRLF when saving
+  flowriteDocumentId: '',
+  flowriteDocumentIdCarrier: null,
   history: {
     stack: [],
     index: -1
@@ -53,7 +55,9 @@ export const getFileStateFromData = data => {
     encoding,
     lineEnding,
     adjustLineEndingOnSave,
-    trimTrailingNewline
+    trimTrailingNewline,
+    flowriteDocumentId = '',
+    flowriteDocumentIdCarrier = null
   } = data
   const id = getUniqueId()
 
@@ -67,7 +71,9 @@ export const getFileStateFromData = data => {
     encoding,
     lineEnding,
     adjustLineEndingOnSave,
-    trimTrailingNewline
+    trimTrailingNewline,
+    flowriteDocumentId,
+    flowriteDocumentIdCarrier
   })
 }
 
@@ -98,7 +104,15 @@ export const getBlankFileState = (tabs, defaultEncoding = 'utf8', lineEnding = '
   })
 }
 
-export const getSingleFileState = ({ id = getUniqueId(), markdown, filename, pathname, options }) => {
+export const getSingleFileState = ({
+  id = getUniqueId(),
+  markdown,
+  filename,
+  pathname,
+  options,
+  flowriteDocumentId = '',
+  flowriteDocumentIdCarrier = null
+}) => {
   // TODO(refactor:renderer/editor): Replace this function with `createDocumentState`.
 
   const fileState = cloneObj(defaultFileState, true)
@@ -114,7 +128,9 @@ export const getSingleFileState = ({ id = getUniqueId(), markdown, filename, pat
     encoding,
     lineEnding,
     adjustLineEndingOnSave,
-    trimTrailingNewline
+    trimTrailingNewline,
+    flowriteDocumentId,
+    flowriteDocumentIdCarrier
   })
 }
 
@@ -135,6 +151,8 @@ export const createDocumentState = (markdownDocument, id = getUniqueId()) => {
     lineEnding,
     adjustLineEndingOnSave,
     trimTrailingNewline,
+    flowriteDocumentId = '',
+    flowriteDocumentIdCarrier = null,
     cursor = null
   } = markdownDocument
 
@@ -149,7 +167,9 @@ export const createDocumentState = (markdownDocument, id = getUniqueId()) => {
     lineEnding,
     cursor,
     adjustLineEndingOnSave,
-    trimTrailingNewline
+    trimTrailingNewline,
+    flowriteDocumentId,
+    flowriteDocumentIdCarrier
   })
 }
 

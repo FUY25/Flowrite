@@ -28,6 +28,9 @@
   --editorColor10: rgba(0, 0, 0, .1);
   --editorColor04: rgba(0, 0, 0, .03);
   --editorBgColor: rgba(255, 255, 255, 1);
+  --workspaceBgColor: var(--editorBgColor);
+  --workspacePanelBgColor: var(--editorBgColor);
+  --workspaceHeaderBgColor: var(--editorBgColor);
   --deleteColor: #ff6969;
   --iconColor: #6B737B;
   --codeBgColor: #d8d8d869;

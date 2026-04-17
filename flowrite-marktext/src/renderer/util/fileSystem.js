@@ -1,6 +1,7 @@
 import path from 'path'
 import crypto from 'crypto'
 import fs from 'fs-extra'
+import { ipcRenderer } from 'electron'
 import { statSync, constants } from 'fs'
 import cp from 'child_process'
 import { tmpdir } from 'os'
@@ -15,14 +16,21 @@ export const create = async (pathname, type) => {
     : fs.outputFile(pathname, '')
 }
 
+export const move = async (src, dest) => {
+  return ipcRenderer.invoke('mt::fs-move-item', {
+    src,
+    dest
+  })
+}
+
 export const paste = async ({ src, dest, type }) => {
   return type === 'cut'
-    ? fs.move(src, dest)
+    ? move(src, dest)
     : fs.copy(src, dest)
 }
 
 export const rename = async (src, dest) => {
-  return fs.move(src, dest)
+  return move(src, dest)
 }
 
 export const getHash = (content, encoding, type) => {

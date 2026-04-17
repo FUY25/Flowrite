@@ -23,6 +23,14 @@
           :step="0.1"
           :onChange="value => onSelectChange('lineHeight', value)"
         ></range>
+        <range
+          description="Workspace Background Warmth"
+          :value="workspaceBackgroundWarmth"
+          :min="0"
+          :max="100"
+          :step="1"
+          :onChange="value => onSelectChange('workspaceBackgroundWarmth', value)"
+        ></range>
         <font-text-box
           description="Font family"
           :value="editorFontFamily"
@@ -204,6 +212,7 @@ export default {
       fontSize: state => state.preferences.fontSize,
       editorFontFamily: state => state.preferences.editorFontFamily,
       lineHeight: state => state.preferences.lineHeight,
+      workspaceBackgroundWarmth: state => state.preferences.workspaceBackgroundWarmth,
       autoPairBracket: state => state.preferences.autoPairBracket,
       autoPairMarkdownSyntax: state => state.preferences.autoPairMarkdownSyntax,
       autoPairQuote: state => state.preferences.autoPairQuote,

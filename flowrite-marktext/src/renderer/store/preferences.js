@@ -19,6 +19,7 @@ const state = {
   editorFontFamily: 'Open Sans',
   fontSize: 16,
   lineHeight: 1.6,
+  workspaceBackgroundWarmth: 0,
   codeFontSize: 14,
   codeFontFamily: 'DejaVu Sans Mono',
   codeBlockLineNumbers: true,

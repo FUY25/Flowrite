@@ -196,6 +196,7 @@ export default {
       imageRelativeDirectoryName: state => state.preferences.imageRelativeDirectoryName,
       imageFolderPath: state => state.preferences.imageFolderPath,
       theme: state => state.preferences.theme,
+      workspaceBackgroundWarmth: state => state.preferences.workspaceBackgroundWarmth,
       sequenceTheme: state => state.preferences.sequenceTheme,
       hideScrollbar: state => state.preferences.hideScrollbar,
       spellcheckerEnabled: state => state.preferences.spellcheckerEnabled,
@@ -455,7 +456,9 @@ export default {
         addCommonStyle({
           codeFontSize: value,
           codeFontFamily: this.codeFontFamily,
-          hideScrollbar: this.hideScrollbar
+          hideScrollbar: this.hideScrollbar,
+          theme: this.theme,
+          workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
         })
       }
     },
@@ -472,7 +475,9 @@ export default {
         addCommonStyle({
           codeFontSize: this.codeFontSize,
           codeFontFamily: value,
-          hideScrollbar: this.hideScrollbar
+          hideScrollbar: this.hideScrollbar,
+          theme: this.theme,
+          workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
         })
       }
     },
@@ -482,7 +487,9 @@ export default {
         addCommonStyle({
           codeFontSize: this.codeFontSize,
           codeFontFamily: this.codeFontFamily,
-          hideScrollbar: value
+          hideScrollbar: value,
+          theme: this.theme,
+          workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
         })
       }
     },

@@ -168,7 +168,10 @@ const actions = {
         }
 
         paste(clipboard)
-          .then(() => {
+          .then(result => {
+            if (clipboard.type === 'cut' && result) {
+              commit('RENAME_IF_NEEDED', result)
+            }
             commit('SET_CLIPBOARD', null)
           })
           .catch(err => {
@@ -217,8 +220,15 @@ const actions = {
     const dirname = path.dirname(src)
     const dest = dirname + PATH_SEPARATOR + name
     rename(src, dest)
-      .then(() => {
-        commit('RENAME_IF_NEEDED', { src, dest })
+      .then(result => {
+        commit('RENAME_IF_NEEDED', result || { src, dest })
+      })
+      .catch(err => {
+        notice.notify({
+          title: 'Error in Side Bar',
+          type: 'error',
+          message: err.message
+        })
       })
   },
 

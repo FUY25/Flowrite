@@ -189,7 +189,7 @@ export default {
     justify-content: space-between;
     gap: 8px;
     padding: 5px 18px 1px;
-    background: color-mix(in srgb, var(--editorBgColor) 97%, white 3%);
+    background: var(--workspaceHeaderBgColor);
   }
 
   .flowrite-toolbar--inline {

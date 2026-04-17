@@ -1,16 +1,45 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
 import { expect } from 'chai'
-import { ipcRenderer } from 'electron'
-import flowriteModule, {
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
+
+const ipcRenderer = {
+  invoke: async () => {
+    throw new Error('Unexpected ipcRenderer.invoke call in test.')
+  },
+  on: () => {},
+  send: () => {}
+}
+
+const electronEntry = require.resolve('electron')
+const originalElectronCacheEntry = require.cache[electronEntry]
+require.cache[electronEntry] = {
+  id: electronEntry,
+  filename: electronEntry,
+  loaded: true,
+  exports: { ipcRenderer }
+}
+
+const flowriteStoreModule = require('../../../src/renderer/store/modules/flowrite.js')
+const preferencesModule = require('../../../src/renderer/store/preferences.js').default
+const flowriteModule = flowriteStoreModule.default
+const {
   createDefaultFlowriteState,
   registerFlowriteLifecycle
-} from '../../../src/renderer/store/modules/flowrite.js'
-import preferencesModule from '../../../src/renderer/store/preferences.js'
+} = flowriteStoreModule
+
+if (originalElectronCacheEntry) {
+  require.cache[electronEntry] = originalElectronCacheEntry
+} else {
+  delete require.cache[electronEntry]
+}
 
 Vue.use(Vuex)
 
 const createPreferencesState = (flowrite = {}) => ({
+  workspaceBackgroundWarmth: 0,
   flowrite: {
     enabled: false,
     configured: false,
@@ -343,6 +372,17 @@ describe('Flowrite renderer store', function () {
     })
 
     expect(store.state.preferences.flowrite).to.deep.equal(flowritePayload)
+  })
+
+  it('hydrates workspace background warmth into renderer preferences state', async function () {
+    const store = createStore()
+    const nextPreferences = {
+      workspaceBackgroundWarmth: 42
+    }
+
+    store.commit('SET_USER_PREFERENCE', nextPreferences)
+
+    expect(store.state.preferences.workspaceBackgroundWarmth).to.equal(42)
   })
 
   it('sends the collaboration mode update through the renderer preference action', async function () {

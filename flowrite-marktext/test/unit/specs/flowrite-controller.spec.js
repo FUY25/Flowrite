@@ -2,6 +2,7 @@ import os from 'os'
 import path from 'path'
 import fs from 'fs-extra'
 import { expect } from 'chai'
+import DataCenter from '../../../src/main/dataCenter'
 import { FlowriteController } from '../../../src/main/flowrite/controller'
 import {
   isActionSeekingMessage,
@@ -16,6 +17,10 @@ import {
   loadComments,
   saveComments
 } from '../../../src/main/flowrite/files/commentsStore'
+import {
+  configureDocumentIndex,
+  rememberDocumentIndexEntry
+} from '../../../src/main/flowrite/files/documentIndex'
 import {
   loadSuggestions,
   saveSuggestions
@@ -39,7 +44,493 @@ describe('Flowrite controller', function () {
   })
 
   afterEach(async function () {
+    configureDocumentIndex({ rootPath: '' })
     await fs.remove(tempRoot)
+  })
+
+  it('uses the approved copy/fork prompt button text for copied documentId', async function () {
+    const sourcePath = path.join(
+      __dirname,
+      '../../../src/main/dataCenter/index.js'
+    )
+    const source = await fs.readFile(sourcePath, 'utf8')
+
+    expect(source).to.include("'Start new commenting session (recommended)'")
+    expect(source).to.include("'Inherit existing comments'")
+  })
+
+  it('bootstraps a moved markdown file by reconnecting sidecars from the embedded documentId', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const oldPath = path.join(tempRoot, 'docs', 'draft.md')
+    const newPath = path.join(tempRoot, 'archive', 'draft.md')
+
+    await fs.ensureDir(path.dirname(oldPath))
+    await fs.ensureDir(path.dirname(newPath))
+    await fs.writeFile(oldPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await saveDocumentRecord(oldPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath
+    })
+    await saveComments(oldPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T10:00:00.000Z',
+      updatedAt: '2026-04-16T10:00:00.000Z',
+      comments: [{
+        id: 'comment-1',
+        author: 'assistant',
+        body: 'Keep me',
+        createdAt: '2026-04-16T10:00:00.000Z'
+      }]
+    }])
+    await rememberDocumentIndexEntry({
+      documentId: 'doc-123',
+      pathname: oldPath,
+      documentDir: getSidecarPaths(oldPath).documentDir
+    })
+
+    await fs.move(oldPath, newPath)
+
+    const reconcileCalls = []
+    const payload = await DataCenter.prototype.bootstrapFlowriteDocument.call({
+      flowriteSettings: {
+        getPublicState () {
+          return {
+            enabled: true,
+            configured: true,
+            online: true
+          }
+        }
+      },
+      flowriteController: {
+        async reconcileSuggestionsWithMarkdown (pathname) {
+          reconcileCalls.push(pathname)
+        }
+      }
+    }, newPath)
+
+    expect(reconcileCalls).to.deep.equal([newPath])
+    expect(payload.document.documentId).to.equal('doc-123')
+    expect(payload.document.lastKnownMarkdownPath).to.equal(newPath)
+    expect(payload.documentId).to.equal('doc-123')
+    expect(payload.pathname).to.equal(newPath)
+    expect(payload.comments).to.have.length(1)
+    expect(payload.comments[0].comments[0].body).to.equal('Keep me')
+    expect(payload.runtimeReady).to.equal(true)
+  })
+
+  it('prompts once and starts a new commenting session when bootstrap detects a copied documentId', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const oldPath = path.join(tempRoot, 'docs', 'draft.md')
+    const newPath = path.join(tempRoot, 'archive', 'draft-copy.md')
+
+    await fs.ensureDir(path.dirname(oldPath))
+    await fs.ensureDir(path.dirname(newPath))
+    await fs.writeFile(oldPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await fs.writeFile(newPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await saveDocumentRecord(oldPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Old history'
+      }]
+    })
+    await saveComments(oldPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T10:00:00.000Z',
+      updatedAt: '2026-04-16T10:00:00.000Z',
+      comments: [{
+        id: 'comment-1',
+        author: 'assistant',
+        body: 'Keep me',
+        createdAt: '2026-04-16T10:00:00.000Z'
+      }]
+    }])
+    await rememberDocumentIndexEntry({
+      documentId: 'doc-123',
+      pathname: oldPath,
+      documentDir: getSidecarPaths(oldPath).documentDir
+    })
+
+    const promptCalls = []
+    const payload = await DataCenter.prototype.bootstrapFlowriteDocument.call({
+      flowriteSettings: {
+        getPublicState () {
+          return {
+            enabled: true,
+            configured: true,
+            online: true
+          }
+        }
+      },
+      flowriteController: {
+        async reconcileSuggestionsWithMarkdown () {}
+      },
+      async resolveDuplicateDocumentChoice (context) {
+        promptCalls.push(context)
+        return 'start_new_commenting_session'
+      }
+    }, newPath)
+
+    const oldComments = await loadComments(oldPath)
+    const newComments = await loadComments(newPath)
+    const newRecord = await loadDocumentRecord(newPath)
+    const newMarkdown = await fs.readFile(newPath, 'utf8')
+
+    expect(promptCalls).to.have.length(1)
+    expect(promptCalls[0].documentId).to.equal('doc-123')
+    expect(promptCalls[0].pathname).to.equal(newPath)
+    expect(promptCalls[0].existingPathname).to.equal(oldPath)
+    expect(payload.documentId).to.match(/^[0-9a-f-]{36}$/)
+    expect(payload.documentId).to.not.equal('doc-123')
+    expect(payload.document.documentId).to.equal(payload.documentId)
+    expect(payload.comments).to.deep.equal([])
+    expect(newComments).to.deep.equal([])
+    expect(payload.document.conversationHistory).to.deep.equal([])
+    expect(newRecord.conversationHistory).to.deep.equal([])
+    expect(oldComments).to.have.length(1)
+    expect(oldComments[0].comments[0].body).to.equal('Keep me')
+    expect(newMarkdown).to.equal(`<!-- flowrite:id=${payload.documentId} -->\n\n# Draft\n`)
+    expect(await fs.pathExists(getSidecarPaths(oldPath).documentDir)).to.equal(true)
+    expect(await fs.pathExists(getSidecarPaths(newPath).documentDir)).to.equal(true)
+  })
+
+  it('prompts once and can inherit existing comments when bootstrap detects a copied documentId', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const oldPath = path.join(tempRoot, 'docs', 'draft.md')
+    const newPath = path.join(tempRoot, 'archive', 'draft-copy.md')
+
+    await fs.ensureDir(path.dirname(oldPath))
+    await fs.ensureDir(path.dirname(newPath))
+    await fs.writeFile(oldPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await fs.writeFile(newPath, '<!-- flowrite:id=doc-123 -->\n\n# Draft\n', 'utf8')
+    await saveDocumentRecord(oldPath, {
+      documentId: 'doc-123',
+      lastKnownMarkdownPath: oldPath,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Old history'
+      }],
+      historyTokenEstimate: 11
+    })
+    await saveComments(oldPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T10:00:00.000Z',
+      updatedAt: '2026-04-16T10:00:00.000Z',
+      comments: [{
+        id: 'comment-1',
+        author: 'assistant',
+        body: 'Keep me',
+        createdAt: '2026-04-16T10:00:00.000Z'
+      }]
+    }])
+    await saveSuggestions(oldPath, [{
+      id: 'suggestion-1',
+      threadId: FLOWRITE_GLOBAL_THREAD_ID,
+      status: 'pending',
+      createdAt: '2026-04-16T10:00:00.000Z'
+    }])
+    await rememberDocumentIndexEntry({
+      documentId: 'doc-123',
+      pathname: oldPath,
+      documentDir: getSidecarPaths(oldPath).documentDir
+    })
+
+    const promptCalls = []
+    const payload = await DataCenter.prototype.bootstrapFlowriteDocument.call({
+      flowriteSettings: {
+        getPublicState () {
+          return {
+            enabled: true,
+            configured: true,
+            online: true
+          }
+        }
+      },
+      flowriteController: {
+        async reconcileSuggestionsWithMarkdown () {}
+      },
+      async resolveDuplicateDocumentChoice (context) {
+        promptCalls.push(context)
+        return 'inherit_existing_comments'
+      }
+    }, newPath)
+
+    const oldComments = await loadComments(oldPath)
+    const newComments = await loadComments(newPath)
+    const newSuggestions = await loadSuggestions(newPath)
+    const newRecord = await loadDocumentRecord(newPath)
+    const newMarkdown = await fs.readFile(newPath, 'utf8')
+
+    expect(promptCalls).to.have.length(1)
+    expect(payload.documentId).to.match(/^[0-9a-f-]{36}$/)
+    expect(payload.documentId).to.not.equal('doc-123')
+    expect(payload.document.documentId).to.equal(payload.documentId)
+    expect(payload.comments).to.have.length(1)
+    expect(payload.comments[0].comments[0].body).to.equal('Keep me')
+    expect(newComments).to.have.length(1)
+    expect(newComments[0].comments[0].body).to.equal('Keep me')
+    expect(payload.document.conversationHistory).to.deep.equal([{
+      role: 'assistant',
+      text: 'Old history'
+    }])
+    expect(newRecord.historyTokenEstimate).to.equal(11)
+    expect(payload.suggestions.map(entry => entry.id)).to.deep.equal(['suggestion-1'])
+    expect(newSuggestions.map(entry => entry.id)).to.deep.equal(['suggestion-1'])
+    expect(oldComments).to.have.length(1)
+    expect(oldComments[0].comments[0].body).to.equal('Keep me')
+    expect(newMarkdown).to.equal(`<!-- flowrite:id=${payload.documentId} -->\n\n# Draft\n`)
+    expect(await fs.pathExists(getSidecarPaths(oldPath).documentDir)).to.equal(true)
+    expect(await fs.pathExists(getSidecarPaths(newPath).documentDir)).to.equal(true)
+  })
+
+  it('writes a generated documentId into markdown during bootstrap for legacy files', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const pathname = path.join(tempRoot, 'legacy-bootstrap.md')
+    await fs.ensureDir(path.dirname(pathname))
+    await fs.writeFile(pathname, '# Draft\n', 'utf8')
+
+    const payload = await DataCenter.prototype.bootstrapFlowriteDocument.call({
+      flowriteSettings: {
+        getPublicState () {
+          return {
+            enabled: true,
+            configured: true,
+            online: true
+          }
+        }
+      },
+      flowriteController: {
+        async reconcileSuggestionsWithMarkdown () {}
+      }
+    }, pathname)
+
+    const markdown = await fs.readFile(pathname, 'utf8')
+
+    expect(payload).to.have.property('documentId', payload.document.documentId)
+    expect(payload.documentId).to.match(/^[0-9a-f-]{36}$/)
+    expect(payload.document.documentId).to.equal(payload.documentId)
+    expect(markdown).to.equal(`<!-- flowrite:id=${payload.documentId} -->\n\n# Draft\n`)
+  })
+
+  it('writes the embedded documentId marker for an existing sidecar-backed legacy bootstrap without changing the id', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const pathname = path.join(tempRoot, 'existing-sidecar-bootstrap.md')
+    await fs.ensureDir(path.dirname(pathname))
+    await fs.writeFile(pathname, '# Draft\n', 'utf8')
+    await saveDocumentRecord(pathname, {
+      documentId: 'doc-existing',
+      lastKnownMarkdownPath: pathname,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Keep this history'
+      }]
+    })
+
+    const payload = await DataCenter.prototype.bootstrapFlowriteDocument.call({
+      flowriteSettings: {
+        getPublicState () {
+          return {
+            enabled: true,
+            configured: true,
+            online: true
+          }
+        }
+      },
+      flowriteController: {
+        async reconcileSuggestionsWithMarkdown () {}
+      }
+    }, pathname)
+
+    const markdown = await fs.readFile(pathname, 'utf8')
+
+    expect(payload.documentId).to.equal('doc-existing')
+    expect(payload.document.documentId).to.equal('doc-existing')
+    expect(payload.document.lastKnownMarkdownPath).to.equal(pathname)
+    expect(payload.document.conversationHistory).to.deep.equal([{
+      role: 'assistant',
+      text: 'Keep this history'
+    }])
+    expect(markdown).to.equal('<!-- flowrite:id=doc-existing -->\n\n# Draft\n')
+  })
+
+  it('prompts once and forks a copied legacy sidecar into a fresh commenting session', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const oldPath = path.join(tempRoot, 'docs', 'legacy-source.md')
+    const newPath = path.join(tempRoot, 'archive', 'legacy-copy.md')
+
+    await fs.ensureDir(path.dirname(oldPath))
+    await fs.ensureDir(path.dirname(newPath))
+    await fs.writeFile(oldPath, '# Legacy draft\n', 'utf8')
+    await fs.writeFile(newPath, '# Legacy draft\n', 'utf8')
+    await saveDocumentRecord(oldPath, {
+      documentId: 'doc-legacy',
+      lastKnownMarkdownPath: oldPath,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Original legacy history'
+      }]
+    })
+    await saveComments(oldPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T14:00:00.000Z',
+      updatedAt: '2026-04-16T14:00:00.000Z',
+      comments: [{
+        id: 'legacy-comment-1',
+        author: 'assistant',
+        body: 'Original legacy comment',
+        createdAt: '2026-04-16T14:00:00.000Z'
+      }]
+    }])
+
+    // Simulate a copied legacy sidecar before bootstrap has injected an HTML id comment.
+    await saveDocumentRecord(newPath, {
+      documentId: 'doc-legacy',
+      lastKnownMarkdownPath: oldPath,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Copied legacy history'
+      }]
+    })
+    await saveComments(newPath, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T14:05:00.000Z',
+      updatedAt: '2026-04-16T14:05:00.000Z',
+      comments: [{
+        id: 'legacy-comment-copy',
+        author: 'assistant',
+        body: 'Copied legacy comment',
+        createdAt: '2026-04-16T14:05:00.000Z'
+      }]
+    }])
+
+    const promptCalls = []
+    const payload = await DataCenter.prototype.bootstrapFlowriteDocument.call({
+      flowriteSettings: {
+        getPublicState () {
+          return {
+            enabled: true,
+            configured: true,
+            online: true
+          }
+        }
+      },
+      flowriteController: {
+        async reconcileSuggestionsWithMarkdown () {}
+      },
+      async resolveDuplicateDocumentChoice (context) {
+        promptCalls.push(context)
+        return 'start_new_commenting_session'
+      }
+    }, newPath)
+
+    const originalRecord = await loadDocumentRecord(oldPath)
+    const originalComments = await loadComments(oldPath)
+    const copiedRecord = await loadDocumentRecord(newPath)
+    const copiedComments = await loadComments(newPath)
+    const copiedMarkdown = await fs.readFile(newPath, 'utf8')
+
+    expect(promptCalls).to.have.length(1)
+    expect(promptCalls[0].documentId).to.equal('doc-legacy')
+    expect(promptCalls[0].pathname).to.equal(newPath)
+    expect(promptCalls[0].existingPathname).to.equal(oldPath)
+    expect(payload.documentId).to.match(/^[0-9a-f-]{36}$/)
+    expect(payload.documentId).to.not.equal('doc-legacy')
+    expect(payload.document.documentId).to.equal(payload.documentId)
+    expect(payload.document.conversationHistory).to.deep.equal([])
+    expect(payload.comments).to.deep.equal([])
+    expect(copiedRecord.documentId).to.equal(payload.documentId)
+    expect(copiedRecord.lastKnownMarkdownPath).to.equal(newPath)
+    expect(copiedRecord.conversationHistory).to.deep.equal([])
+    expect(copiedComments).to.deep.equal([])
+    expect(copiedMarkdown).to.equal(`<!-- flowrite:id=${payload.documentId} -->\n\n# Legacy draft\n`)
+    expect(originalRecord.documentId).to.equal('doc-legacy')
+    expect(originalRecord.lastKnownMarkdownPath).to.equal(oldPath)
+    expect(originalRecord.conversationHistory).to.deep.equal([{
+      role: 'assistant',
+      text: 'Original legacy history'
+    }])
+    expect(originalComments).to.have.length(1)
+    expect(originalComments[0].comments[0].body).to.equal('Original legacy comment')
+  })
+
+  it('keeps disabled bootstrap read-only for legacy markdown even when a sidecar documentId already exists', async function () {
+    configureDocumentIndex({ rootPath: tempRoot })
+
+    const pathname = path.join(tempRoot, 'disabled-legacy.md')
+    await fs.ensureDir(path.dirname(pathname))
+    await fs.writeFile(pathname, '# Disabled legacy draft\n', 'utf8')
+    await saveDocumentRecord(pathname, {
+      documentId: 'doc-disabled',
+      lastKnownMarkdownPath: pathname,
+      conversationHistory: [{
+        role: 'assistant',
+        text: 'Read-only history'
+      }]
+    })
+    await saveComments(pathname, [{
+      id: FLOWRITE_GLOBAL_THREAD_ID,
+      scope: 'global',
+      createdAt: '2026-04-16T15:00:00.000Z',
+      updatedAt: '2026-04-16T15:00:00.000Z',
+      comments: [{
+        id: 'disabled-comment-1',
+        author: 'assistant',
+        body: 'Read-only comment',
+        createdAt: '2026-04-16T15:00:00.000Z'
+      }]
+    }])
+
+    const reconcileCalls = []
+    const payload = await DataCenter.prototype.bootstrapFlowriteDocument.call({
+      flowriteSettings: {
+        getPublicState () {
+          return {
+            enabled: false,
+            configured: false,
+            online: false
+          }
+        }
+      },
+      flowriteController: {
+        async reconcileSuggestionsWithMarkdown (targetPath) {
+          reconcileCalls.push(targetPath)
+        }
+      }
+    }, pathname)
+
+    const markdown = await fs.readFile(pathname, 'utf8')
+    const paths = getSidecarPaths(pathname)
+
+    expect(reconcileCalls).to.deep.equal([])
+    expect(payload.runtimeReady).to.equal(false)
+    expect(payload.document.documentId).to.equal('doc-disabled')
+    expect(payload.document.lastKnownMarkdownPath).to.equal(pathname)
+    expect(payload.document.conversationHistory).to.deep.equal([{
+      role: 'assistant',
+      text: 'Read-only history'
+    }])
+    expect(payload.documentId).to.equal(undefined)
+    expect(payload.pathname).to.equal(pathname)
+    expect(payload.comments).to.have.length(1)
+    expect(payload.comments[0].comments[0].body).to.equal('Read-only comment')
+    expect(payload.suggestions).to.deep.equal([])
+    expect(markdown).to.equal('# Disabled legacy draft\n')
+    expect(await fs.pathExists(paths.documentDir)).to.equal(true)
+    expect(await fs.pathExists(paths.documentFile)).to.equal(true)
+    expect(await fs.pathExists(paths.commentsFile)).to.equal(true)
+    expect(await fs.pathExists(paths.suggestionsFile)).to.equal(false)
   })
 
   it('accepts cross-paragraph margin anchors and persists the thread before AI work starts', async function () {

@@ -203,12 +203,14 @@ export default {
     },
     titleBarBackgroundStyle () {
       if (!this.showSideBar) {
-        return null
+        return {
+          background: 'var(--workspaceHeaderBgColor)'
+        }
       }
 
       const paneWidth = this.effectiveSideBarWidth
-      const paneColor = 'color-mix(in srgb, var(--sideBarBgColor) 88%, var(--editorBgColor) 12%)'
-      const barColor = 'color-mix(in srgb, var(--editorBgColor) 97%, white 3%)'
+      const paneColor = 'color-mix(in srgb, var(--sideBarBgColor) 88%, var(--workspaceHeaderBgColor) 12%)'
+      const barColor = 'var(--workspaceHeaderBgColor)'
 
       return {
         background: `linear-gradient(to right, ${paneColor} 0, ${paneColor} ${paneWidth}px, ${barColor} ${paneWidth}px, ${barColor} 100%)`
@@ -345,7 +347,7 @@ export default {
 <style scoped>
   .title-bar-editor-bg {
     height: var(--titleBarHeight);
-    background: var(--editorBgColor);
+    background: var(--workspaceHeaderBgColor);
     position: relative;
     left: 0;
     top: 0;
@@ -354,7 +356,7 @@ export default {
   .title-bar {
     -webkit-app-region: drag;
     user-select: none;
-    background: color-mix(in srgb, var(--editorBgColor) 97%, white 3%);
+    background: var(--workspaceHeaderBgColor);
     height: var(--titleBarHeight);
     box-sizing: border-box;
     color: var(--editorColor50);
