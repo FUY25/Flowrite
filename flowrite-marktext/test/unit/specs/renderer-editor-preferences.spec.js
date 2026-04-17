@@ -1,7 +1,11 @@
 import { expect } from 'chai'
 import { createRequire } from 'module'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 const require = createRequire(import.meta.url)
+const specDirectory = path.dirname(fileURLToPath(import.meta.url))
 const electronEntry = require.resolve('electron')
 const preferencesModuleEntry = require.resolve('../../../src/renderer/store/preferences.js')
 const originalElectronCacheEntry = require.cache[electronEntry]
@@ -39,5 +43,16 @@ describe('Renderer editor preferences', function () {
     expect(nextState.primaryWritingFont).to.equal('Times New Roman')
     expect(nextState.secondaryWritingFont).to.equal('Flowrite Source Han Serif SC')
     expect(nextState.discussionFont).to.equal('system-ui')
+  })
+
+  it('declares primary, secondary, and discussion font controls in the editor preferences UI', function () {
+    const editorPreferencesSource = fs.readFileSync(
+      path.resolve(specDirectory, '../../../src/renderer/prefComponents/editor/index.vue'),
+      'utf8'
+    )
+
+    expect(editorPreferencesSource).to.include('Primary Writing Font')
+    expect(editorPreferencesSource).to.include('Secondary Writing Font')
+    expect(editorPreferencesSource).to.include('Discussion Font')
   })
 })

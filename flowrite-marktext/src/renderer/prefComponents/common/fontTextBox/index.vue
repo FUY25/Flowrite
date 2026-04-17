@@ -62,6 +62,10 @@ export default {
       type: Boolean,
       default: false
     },
+    presets: {
+      type: Array,
+      default: () => []
+    },
     onlyMonospace: {
       type: Boolean,
       default: false
@@ -79,7 +83,7 @@ export default {
 
   methods: {
     querySearch (queryString, callback) {
-      const fontFamilies = this.fontFamilies
+      const fontFamilies = [...new Set([...this.presets, ...this.fontFamilies])]
       const results = queryString && this.defaultValue !== queryString
         ? fontFamilies.filter(f => f.toLowerCase().indexOf(queryString.toLowerCase()) === 0)
         : fontFamilies
