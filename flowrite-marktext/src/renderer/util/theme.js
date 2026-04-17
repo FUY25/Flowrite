@@ -1,8 +1,10 @@
-import { THEME_STYLE_ID, COMMON_STYLE_ID, DEFAULT_CODE_FONT_FAMILY, oneDarkThemes, railscastsThemes } from '../config'
+import { THEME_STYLE_ID, COMMON_STYLE_ID, oneDarkThemes, railscastsThemes } from '../config'
 import { dark, graphite, materialDark, oneDark, ulysses } from './themeColor'
-import { buildWorkspaceWarmthCss } from './workspaceWarmth'
+import { buildCommonStyleText } from './commonStyle'
 import { isLinux } from './index'
 import elementStyle from 'element-ui/lib/theme-chalk/index.css'
+import ebGaramondRegularTtf from '../assets/fonts/eb-garamond/EBGaramond-Regular.ttf'
+import sourceHanSerifScRegularOtf from '../assets/fonts/source-han-serif-sc/SourceHanSerifSC-Regular.otf'
 
 const ORIGINAL_THEME = '#409EFF'
 const patchTheme = css => {
@@ -122,7 +124,6 @@ export const setEditorWidth = value => {
 }
 
 export const addCommonStyle = options => {
-  const { codeFontFamily, codeFontSize, hideScrollbar, theme, workspaceBackgroundWarmth } = options
   let sheet = document.querySelector(`#${COMMON_STYLE_ID}`)
   if (!sheet) {
     sheet = document.createElement('style')
@@ -130,26 +131,11 @@ export const addCommonStyle = options => {
     document.head.appendChild(sheet)
   }
 
-  let scrollbarStyle = ''
-  if (hideScrollbar) {
-    scrollbarStyle = '::-webkit-scrollbar {display: none;}'
-  }
-
-  sheet.innerHTML = `${scrollbarStyle}
-span code,
-td code,
-th code,
-code,
-code[class*="language-"],
-.CodeMirror,
-pre.ag-paragraph {
-font-family: ${codeFontFamily}, ${DEFAULT_CODE_FONT_FAMILY};
-font-size: ${codeFontSize}px;
-}
-
-${buildWorkspaceWarmthCss({ theme, workspaceBackgroundWarmth })}
-${getEmojiPickerPatch()}
-`
+  sheet.innerHTML = buildCommonStyleText(options, {
+    ebGaramondRegularUrl: ebGaramondRegularTtf,
+    sourceHanSerifScRegularUrl: sourceHanSerifScRegularOtf,
+    emojiPickerPatch: getEmojiPickerPatch()
+  })
 }
 
 export const addElementStyle = () => {

@@ -1,4 +1,5 @@
 import { expect } from 'chai'
+import { buildCommonStyleText } from '../../../src/renderer/util/commonStyle.js'
 import {
   buildWorkspaceWarmthCss,
   clampWorkspaceBackgroundWarmth,
@@ -58,5 +59,20 @@ describe('Workspace warmth utility', function () {
 
     expect(css).to.include('--workspaceBgColor:')
     expect(css).to.not.include('--sideBarBgColor')
+  })
+
+  it('registers bundled writing fonts and typography fallback variables', function () {
+    const css = buildCommonStyleText({
+      codeFontFamily: 'Menlo',
+      codeFontSize: 14,
+      hideScrollbar: false,
+      theme: 'light',
+      workspaceBackgroundWarmth: 0
+    })
+
+    expect(css).to.include('@font-face')
+    expect(css).to.include('font-family: "Flowrite EB Garamond"')
+    expect(css).to.include('--defaultWritingFontFamily:')
+    expect(css).to.include('--defaultDiscussionFontFamily:')
   })
 })
