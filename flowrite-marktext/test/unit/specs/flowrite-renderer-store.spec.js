@@ -69,6 +69,9 @@ const loadFlowriteStoreModules = async () => {
 
 const createPreferencesState = (flowrite = {}) => ({
   workspaceBackgroundWarmth: 0,
+  primaryWritingFont: 'Flowrite EB Garamond',
+  secondaryWritingFont: 'Flowrite Source Han Serif SC',
+  discussionFont: 'system-ui',
   flowrite: {
     enabled: false,
     configured: false,
@@ -423,6 +426,21 @@ describe('Flowrite renderer store', function () {
     store.commit('SET_USER_PREFERENCE', nextPreferences)
 
     expect(store.state.preferences.workspaceBackgroundWarmth).to.equal(42)
+  })
+
+  it('hydrates writing and discussion typography preferences into renderer state', async function () {
+    const store = createStore()
+    const nextPreferences = {
+      primaryWritingFont: 'Times New Roman',
+      secondaryWritingFont: 'Songti SC',
+      discussionFont: 'PingFang SC'
+    }
+
+    store.commit('SET_USER_PREFERENCE', nextPreferences)
+
+    expect(store.state.preferences.primaryWritingFont).to.equal('Times New Roman')
+    expect(store.state.preferences.secondaryWritingFont).to.equal('Songti SC')
+    expect(store.state.preferences.discussionFont).to.equal('PingFang SC')
   })
 
   it('sends the collaboration mode update through the renderer preference action', async function () {

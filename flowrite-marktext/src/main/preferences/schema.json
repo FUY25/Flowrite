@@ -78,6 +78,24 @@
     "pattern": "^[^\\s]+((-|\\s)*[^\\s])*$",
     "default": "Open Sans"
   },
+  "primaryWritingFont": {
+    "description": "Editor--Primary writing font family",
+    "type": "string",
+    "pattern": "^[^\\s]+((-|\\s)*[^\\s])*$",
+    "default": "Flowrite EB Garamond"
+  },
+  "secondaryWritingFont": {
+    "description": "Editor--Secondary writing font family",
+    "type": "string",
+    "pattern": "^[^\\s]+((-|\\s)*[^\\s])*$",
+    "default": "Flowrite Source Han Serif SC"
+  },
+  "discussionFont": {
+    "description": "Editor--Discussion font family",
+    "type": "string",
+    "pattern": "^[^\\s]+((-|\\s)*[^\\s])*$",
+    "default": "system-ui"
+  },
   "fontSize": {
     "description": "Editor--Font size in pixels",
     "type": "number",
