@@ -453,13 +453,7 @@ export default {
 
     codeFontSize: function (value, oldValue) {
       if (value !== oldValue) {
-        addCommonStyle({
-          codeFontSize: value,
-          codeFontFamily: this.codeFontFamily,
-          hideScrollbar: this.hideScrollbar,
-          theme: this.theme,
-          workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
-        })
+        this.refreshCommonStyle()
       }
     },
 
@@ -472,25 +466,13 @@ export default {
 
     codeFontFamily: function (value, oldValue) {
       if (value !== oldValue) {
-        addCommonStyle({
-          codeFontSize: this.codeFontSize,
-          codeFontFamily: value,
-          hideScrollbar: this.hideScrollbar,
-          theme: this.theme,
-          workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
-        })
+        this.refreshCommonStyle()
       }
     },
 
     hideScrollbar: function (value, oldValue) {
       if (value !== oldValue) {
-        addCommonStyle({
-          codeFontSize: this.codeFontSize,
-          codeFontFamily: this.codeFontFamily,
-          hideScrollbar: value,
-          theme: this.theme,
-          workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
-        })
+        this.refreshCommonStyle()
       }
     },
 
@@ -778,6 +760,16 @@ export default {
     })
   },
   methods: {
+    refreshCommonStyle () {
+      addCommonStyle({
+        codeFontSize: this.codeFontSize,
+        codeFontFamily: this.codeFontFamily,
+        hideScrollbar: this.hideScrollbar,
+        theme: this.theme,
+        workspaceBackgroundWarmth: this.workspaceBackgroundWarmth
+      })
+    },
+
     getMarginParagraphRoot () {
       if (this.$el && typeof this.$el.querySelector === 'function') {
         return this.$el.querySelector('#ag-editor-id') || this.$el.querySelector('.editor-component') || this.$el
