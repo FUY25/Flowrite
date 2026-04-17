@@ -98,7 +98,7 @@ class QuickInsert extends BaseScrollFloat {
       if (status) {
         this.block = block
         this.show(reference)
-        this.search(block.text.substring(1)) // remove `@` char
+        this.search(block.text.substring(1)) // remove `/` char
       } else {
         this.hide()
       }

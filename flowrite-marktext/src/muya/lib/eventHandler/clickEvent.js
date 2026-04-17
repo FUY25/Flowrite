@@ -226,6 +226,25 @@ class ClickEvent {
         }
       }
 
+      const targetParagraph = target.closest('.ag-paragraph')
+      const targetParagraphContent = target.closest('.ag-paragraph-content')
+      if (targetParagraph && targetParagraphContent && !target.closest('.ag-code-content')) {
+        let handled = false
+
+        if (event.detail === 2) {
+          handled = selection.selectSentenceAt(targetParagraph, event.clientX, event.clientY)
+        } else if (event.detail >= 3) {
+          handled = selection.selectParagraphAt(targetParagraph)
+        }
+
+        if (handled) {
+          event.preventDefault()
+          event.stopPropagation()
+          contentState.cursor = selection.getCursorRange()
+          return contentState.partialRender()
+        }
+      }
+
       // handler to-do checkbox click
       if (target.tagName === 'INPUT' && target.classList.contains(CLASS_OR_ID.AG_TASK_LIST_ITEM_CHECKBOX)) {
         contentState.listItemCheckBoxClick(target)

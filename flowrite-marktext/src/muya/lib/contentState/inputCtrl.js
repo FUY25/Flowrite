@@ -32,11 +32,11 @@ const BACK_HASH = {
 let renderCodeBlockTimer = null
 
 const inputCtrl = ContentState => {
-  // Input @ to quick insert paragraph
+  // Input / to quick insert paragraph
   ContentState.prototype.checkQuickInsert = function (block) {
     const { type, text, functionType } = block
     if (type !== 'span' || functionType !== 'paragraphContent') return false
-    return /^@\S*$/.test(text)
+    return /^\/\S*$/.test(text)
   }
 
   ContentState.prototype.checkCursorInTokenType = function (functionType, text, offset, type) {

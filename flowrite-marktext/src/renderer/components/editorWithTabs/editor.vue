@@ -120,7 +120,6 @@ import FormatPicker from 'muya/lib/ui/formatPicker'
 import LinkTools from 'muya/lib/ui/linkTools'
 import FootnoteTool from 'muya/lib/ui/footnoteTool'
 import TableBarTools from 'muya/lib/ui/tableTools'
-import FrontMenu from 'muya/lib/ui/frontMenu'
 import MarginCommentLayer from '../flowrite/MarginCommentLayer.vue'
 import MarginCommentDots from '../flowrite/MarginCommentDots.vue'
 import MarginAnchorHighlights from '../flowrite/MarginAnchorHighlights.vue'
@@ -584,7 +583,6 @@ export default {
       Muya.use(Transformer)
       Muya.use(ImageToolbar)
       Muya.use(FormatPicker)
-      Muya.use(FrontMenu)
       Muya.use(LinkTools, {
         jumpClick: this.jumpClick
       })

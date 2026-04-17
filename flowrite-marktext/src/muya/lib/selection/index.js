@@ -19,6 +19,149 @@ const filterOnlyParentElements = node => {
   return isBlockContainer(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
 }
 
+const TEXT_ROOT_SELECTOR = '.ag-paragraph-content, .ag-atx-line, .ag-code-content, .ag-cell-content, .ag-thematic-break-line'
+const SENTENCE_END_REG = /[.!?]/
+const SENTENCE_TRAILING_REG = /["')\]]/
+
+const getParagraphTextRoot = paragraph => {
+  if (!paragraph) return null
+  return paragraph.querySelector(TEXT_ROOT_SELECTOR) || paragraph
+}
+
+const isIgnoredTextNode = node => {
+  if (!node || node.nodeType !== 3) return true
+  if (!node.textContent || !node.textContent.replace(/\u200B/g, '')) return true
+
+  let current = node.parentNode
+  while (current) {
+    if (
+      current.classList &&
+      (
+        current.classList.contains(CLASS_OR_ID.AG_FRONT_ICON) ||
+        current.classList.contains(CLASS_OR_ID.AG_MATH_RENDER) ||
+        current.classList.contains(CLASS_OR_ID.AG_RUBY_RENDER)
+      )
+    ) {
+      return true
+    }
+    current = current.parentNode
+  }
+
+  return false
+}
+
+const getTextSegments = root => {
+  const segments = []
+  const treeWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false)
+  let node = treeWalker.nextNode()
+  let offset = 0
+
+  while (node) {
+    if (!isIgnoredTextNode(node)) {
+      const length = node.textContent.length
+      segments.push({
+        node,
+        start: offset,
+        end: offset + length
+      })
+      offset += length
+    }
+    node = treeWalker.nextNode()
+  }
+
+  return {
+    text: segments.map(segment => segment.node.textContent).join(''),
+    segments
+  }
+}
+
+const resolveSegmentOffset = (segments, offset) => {
+  if (!segments.length) return null
+  const lastSegment = segments[segments.length - 1]
+  const safeOffset = Math.max(0, Math.min(offset, lastSegment.end))
+
+  for (const segment of segments) {
+    if (safeOffset <= segment.end) {
+      return {
+        node: segment.node,
+        offset: Math.min(Math.max(safeOffset - segment.start, 0), segment.node.textContent.length)
+      }
+    }
+  }
+
+  return {
+    node: lastSegment.node,
+    offset: lastSegment.node.textContent.length
+  }
+}
+
+const getCaretRangeFromPoint = (doc, clientX, clientY) => {
+  if (typeof doc.caretRangeFromPoint === 'function') {
+    return doc.caretRangeFromPoint(clientX, clientY)
+  }
+
+  if (typeof doc.caretPositionFromPoint === 'function') {
+    const position = doc.caretPositionFromPoint(clientX, clientY)
+    if (!position) return null
+    const range = doc.createRange()
+    range.setStart(position.offsetNode, position.offset)
+    range.collapse(true)
+    return range
+  }
+
+  return null
+}
+
+const getRangeOffset = (root, range) => {
+  const preCaretRange = range.cloneRange()
+  preCaretRange.selectNodeContents(root)
+  preCaretRange.setEnd(range.startContainer, range.startOffset)
+  return preCaretRange.toString().length
+}
+
+const isSentenceBoundary = (text, index) => {
+  if (!SENTENCE_END_REG.test(text[index])) return false
+
+  let nextIndex = index + 1
+  while (nextIndex < text.length && SENTENCE_TRAILING_REG.test(text[nextIndex])) {
+    nextIndex++
+  }
+
+  return nextIndex === text.length || /\s/.test(text[nextIndex])
+}
+
+const getSentenceStart = (text, offset) => {
+  for (let index = Math.min(Math.max(offset - 1, 0), text.length - 1); index >= 0; index--) {
+    if (isSentenceBoundary(text, index)) {
+      let start = index + 1
+      while (start < text.length && /\s/.test(text[start])) {
+        start++
+      }
+      return start
+    }
+  }
+
+  let start = 0
+  while (start < text.length && /\s/.test(text[start])) {
+    start++
+  }
+  return start
+}
+
+const getSentenceEnd = (text, offset) => {
+  for (let index = Math.max(offset, 0); index < text.length; index++) {
+    if (isSentenceBoundary(text, index)) {
+      let end = index + 1
+      while (end < text.length && SENTENCE_TRAILING_REG.test(text[end])) {
+        end++
+      }
+      return end
+    }
+  }
+
+  return text.length
+}
+
 class Selection {
   constructor (doc) {
     this.doc = doc // document
@@ -396,6 +539,47 @@ class Selection {
 
     selection.removeAllRanges()
     selection.addRange(range)
+  }
+
+  selectTextOffsets (root, startOffset, endOffset) {
+    const { segments } = getTextSegments(root)
+    if (!segments.length) return false
+
+    const start = resolveSegmentOffset(segments, startOffset)
+    const end = resolveSegmentOffset(segments, endOffset)
+    if (!start || !end) return false
+
+    const range = this.doc.createRange()
+    range.setStart(start.node, start.offset)
+    range.setEnd(end.node, end.offset)
+    this.selectRange(range)
+    return true
+  }
+
+  selectSentenceAt (paragraph, clientX, clientY) {
+    const root = getParagraphTextRoot(paragraph)
+    const caretRange = root && getCaretRangeFromPoint(this.doc, clientX, clientY)
+    if (!root || !caretRange) return false
+    if (caretRange.startContainer !== root && !root.contains(caretRange.startContainer)) return false
+
+    const { text } = getTextSegments(root)
+    if (!text.length) return false
+
+    const caretOffset = Math.min(getRangeOffset(root, caretRange), text.length)
+    const startOffset = getSentenceStart(text, caretOffset)
+    const endOffset = getSentenceEnd(text, caretOffset)
+
+    return this.selectTextOffsets(root, startOffset, endOffset)
+  }
+
+  selectParagraphAt (paragraph) {
+    const root = getParagraphTextRoot(paragraph)
+    if (!root) return false
+
+    const { text } = getTextSegments(root)
+    if (!text.length) return false
+
+    return this.selectTextOffsets(root, 0, text.length)
   }
 
   // https://stackoverflow.com/questions/1197401/
