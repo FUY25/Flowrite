@@ -15,24 +15,12 @@ export const buildCommonStyleText = (options, assets = {}) => {
   } = options
 
   const {
-    ebGaramondRegularUrl = 'flowrite-eb-garamond-regular',
-    sourceHanSerifScRegularUrl = 'flowrite-source-han-serif-sc-regular',
     emojiPickerPatch = ''
   } = assets
 
   const scrollbarStyle = hideScrollbar ? '::-webkit-scrollbar {display: none;}' : ''
 
   return `${scrollbarStyle}
-@font-face {
-  font-family: "Flowrite EB Garamond";
-  src: url(${ebGaramondRegularUrl}) format("truetype");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Flowrite Source Han Serif SC";
-  src: url(${sourceHanSerifScRegularUrl}) format("opentype");
-  font-display: swap;
-}
 :root {
   --defaultWritingFontFamily: ${DEFAULT_EDITOR_FONT_FAMILY};
   --defaultDiscussionFontFamily: ${DEFAULT_DISCUSSION_FONT_FALLBACK};
@@ -50,5 +38,45 @@ font-size: ${codeFontSize}px;
 
 ${buildWorkspaceWarmthCss({ theme, workspaceBackgroundWarmth })}
 ${emojiPickerPatch}
+`
+}
+
+export const buildBundledFontFaceText = (assets = {}) => {
+  const {
+    ebGaramondVariableUrl = 'flowrite-eb-garamond-variable',
+    sourceHanSerifScRegularUrl = 'flowrite-source-han-serif-sc-regular',
+    sourceHanSerifScMediumUrl = 'flowrite-source-han-serif-sc-medium',
+    sourceHanSerifScSemiBoldUrl = 'flowrite-source-han-serif-sc-semibold'
+  } = assets
+
+  return `
+@font-face {
+  font-family: "Flowrite EB Garamond";
+  src: url(${ebGaramondVariableUrl}) format("truetype");
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Flowrite Source Han Serif SC";
+  src: url(${sourceHanSerifScRegularUrl}) format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Flowrite Source Han Serif SC";
+  src: url(${sourceHanSerifScMediumUrl}) format("opentype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Flowrite Source Han Serif SC";
+  src: url(${sourceHanSerifScSemiBoldUrl}) format("opentype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
 `
 }

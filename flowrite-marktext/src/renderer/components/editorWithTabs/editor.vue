@@ -2,7 +2,7 @@
   <div
     class="editor-wrapper"
     :class="[{ 'typewriter': typewriter, 'focus': focus, 'source': sourceCode }]"
-    :style="{ 'lineHeight': lineHeight, 'fontSize': `${fontSize}px`, 'font-family': writingFontFamily }"
+    :style="{ 'lineHeight': lineHeight, 'fontSize': `${fontSize}px`, 'font-family': writingFontFamily, 'fontWeight': writingFontWeight }"
     :dir="textDirection"
   >
     <div
@@ -181,6 +181,7 @@ export default {
       isGitlabCompatibilityEnabled: state => state.preferences.isGitlabCompatibilityEnabled,
       lineHeight: state => state.preferences.lineHeight,
       fontSize: state => state.preferences.fontSize,
+      writingFontWeight: state => state.preferences.writingFontWeight,
       primaryWritingFont: state => state.preferences.primaryWritingFont,
       secondaryWritingFont: state => state.preferences.secondaryWritingFont,
       codeFontSize: state => state.preferences.codeFontSize,

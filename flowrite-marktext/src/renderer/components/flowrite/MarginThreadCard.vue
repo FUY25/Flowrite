@@ -620,6 +620,7 @@ export default {
     border: none;
     border-radius: 0;
     background: transparent;
+    font-family: inherit;
     color: rgba(54, 60, 70, 0.92);
     font-size: 13px;
     line-height: 1.55;

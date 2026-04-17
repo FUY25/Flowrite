@@ -197,4 +197,25 @@ describe('Flowrite global comments', function () {
       vm.$destroy()
     }
   })
+
+  it('inherits the shared discussion font in the composer input', async function () {
+    const store = createStore()
+    store.state.preferences.discussionFont = 'serif'
+    const vm = mountGlobalComments(store)
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+
+      const rootFontFamily = window.getComputedStyle(vm.$el).fontFamily
+      const input = vm.$el.querySelector('.flowrite-global-comments__input')
+      expect(input).to.not.equal(null)
+      expect(window.getComputedStyle(input).fontFamily).to.equal(rootFontFamily)
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
 })

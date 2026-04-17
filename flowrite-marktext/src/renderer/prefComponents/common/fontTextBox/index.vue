@@ -10,6 +10,7 @@
       v-model="selectValue"
       :fetch-suggestions="querySearch"
       placeholder="Select font..."
+      @change="handleChange"
       @select="handleSelect"
     >
       <i class="el-icon-arrow-down el-input__icon" slot="suffix"></i>
@@ -90,11 +91,19 @@ export default {
       callback(results)
     },
 
-    handleSelect (value) {
+    commitValue (value) {
       if (/^[^\s]+((-|\s)*[^\s])*$/.test(value)) {
         this.selectValue = value
         this.onChange(value)
       }
+    },
+
+    handleSelect (value) {
+      this.commitValue(value)
+    },
+
+    handleChange (value) {
+      this.commitValue(value)
     },
 
     handleMoreClick () {

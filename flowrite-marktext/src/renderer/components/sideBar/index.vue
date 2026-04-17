@@ -286,7 +286,7 @@ export default {
     position: relative;
     color: var(--sideBarColor);
     user-select: none;
-    background: color-mix(in srgb, var(--sideBarBgColor) 88%, var(--editorBgColor) 12%);
+    background: var(--workspaceSidebarBgColor);
   }
 
   .side-bar__pane {

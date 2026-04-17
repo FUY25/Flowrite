@@ -4,19 +4,36 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-const require = createRequire(import.meta.url)
-const {
-  getDefaultPrimaryWritingFont,
-  getDefaultSecondaryWritingFont,
-  getDefaultDiscussionFont,
-  buildWritingFontFamily,
-  buildDiscussionFontFamily,
-  migrateLegacyEditorFontFamily
-} = require('../../../src/renderer/util/typography')
-
 const specDirectory = path.dirname(fileURLToPath(import.meta.url))
+const isKarmaRuntime = () => typeof window !== 'undefined' && Boolean(window.__karma__)
+
+let getDefaultPrimaryWritingFont
+let getDefaultSecondaryWritingFont
+let getDefaultDiscussionFont
+let buildWritingFontFamily
+let buildDiscussionFontFamily
+let migrateLegacyEditorFontFamily
+
+const loadTypographyModule = async () => {
+  if (isKarmaRuntime()) {
+    return import('../../../src/renderer/util/typography.js')
+  }
+
+  const require = createRequire(import.meta.url)
+  return require('../../../src/renderer/util/typography')
+}
 
 describe('Renderer typography utility', function () {
+  before(async function () {
+    const typographyModule = await loadTypographyModule()
+    getDefaultPrimaryWritingFont = typographyModule.getDefaultPrimaryWritingFont
+    getDefaultSecondaryWritingFont = typographyModule.getDefaultSecondaryWritingFont
+    getDefaultDiscussionFont = typographyModule.getDefaultDiscussionFont
+    buildWritingFontFamily = typographyModule.buildWritingFontFamily
+    buildDiscussionFontFamily = typographyModule.buildDiscussionFontFamily
+    migrateLegacyEditorFontFamily = typographyModule.migrateLegacyEditorFontFamily
+  })
+
   it('exposes the bundled primary and secondary writing defaults', function () {
     expect(getDefaultPrimaryWritingFont()).to.equal('Flowrite EB Garamond')
     expect(getDefaultSecondaryWritingFont()).to.equal('Flowrite Source Han Serif SC')
@@ -69,6 +86,7 @@ describe('Renderer typography utility', function () {
 
     expect(editorSource).to.include('buildWritingFontFamily')
     expect(editorSource).to.include("'font-family': writingFontFamily")
+    expect(editorSource).to.include("'fontWeight': writingFontWeight")
     expect(titleBarSource).to.include('buildWritingFontFamily')
     expect(titleBarSource).to.include('fontFamily: writingFontFamily')
   })

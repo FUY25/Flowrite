@@ -1,12 +1,16 @@
-import { THEME_STYLE_ID, COMMON_STYLE_ID, oneDarkThemes, railscastsThemes } from '../config'
+import { THEME_STYLE_ID, COMMON_STYLE_ID, COMMON_FONT_STYLE_ID, oneDarkThemes, railscastsThemes } from '../config'
 import { dark, graphite, materialDark, oneDark, ulysses } from './themeColor'
-import { buildCommonStyleText } from './commonStyle'
+import { buildBundledFontFaceText, buildCommonStyleText } from './commonStyle'
 import { isLinux } from './index'
 import elementStyle from 'element-ui/lib/theme-chalk/index.css'
-import ebGaramondRegularTtf from '../assets/fonts/eb-garamond/EBGaramond-Regular.ttf'
+import ebGaramondVariableTtf from '../assets/fonts/eb-garamond/EBGaramond-wght.ttf'
 import sourceHanSerifScRegularOtf from '../assets/fonts/source-han-serif-sc/SourceHanSerifSC-Regular.otf'
+import sourceHanSerifScMediumOtf from '../assets/fonts/source-han-serif-sc/SourceHanSerifSC-Medium.otf'
+import sourceHanSerifScSemiBoldOtf from '../assets/fonts/source-han-serif-sc/SourceHanSerifSC-SemiBold.otf'
 
 const ORIGINAL_THEME = '#409EFF'
+let bundledFontsPreloaded = false
+
 const patchTheme = css => {
   return `@media not print {\n${css}\n}`
 }
@@ -132,10 +136,50 @@ export const addCommonStyle = options => {
   }
 
   sheet.innerHTML = buildCommonStyleText(options, {
-    ebGaramondRegularUrl: ebGaramondRegularTtf,
-    sourceHanSerifScRegularUrl: sourceHanSerifScRegularOtf,
     emojiPickerPatch: getEmojiPickerPatch()
   })
+}
+
+const preloadBundledFonts = () => {
+  if (bundledFontsPreloaded || !document.fonts || typeof document.fonts.load !== 'function') {
+    return
+  }
+
+  bundledFontsPreloaded = true
+  const fontLoads = [
+    '400 1em "Flowrite EB Garamond"',
+    '500 1em "Flowrite EB Garamond"',
+    '600 1em "Flowrite EB Garamond"',
+    '400 1em "Flowrite Source Han Serif SC"',
+    '500 1em "Flowrite Source Han Serif SC"',
+    '600 1em "Flowrite Source Han Serif SC"'
+  ]
+
+  for (const font of fontLoads) {
+    document.fonts.load(font).catch(() => {})
+  }
+}
+
+export const addBundledFontStyle = () => {
+  let sheet = document.querySelector(`#${COMMON_FONT_STYLE_ID}`)
+  if (!sheet) {
+    sheet = document.createElement('style')
+    sheet.id = COMMON_FONT_STYLE_ID
+    document.head.appendChild(sheet)
+  }
+
+  const fontFaceText = buildBundledFontFaceText({
+    ebGaramondVariableUrl: ebGaramondVariableTtf,
+    sourceHanSerifScRegularUrl: sourceHanSerifScRegularOtf,
+    sourceHanSerifScMediumUrl: sourceHanSerifScMediumOtf,
+    sourceHanSerifScSemiBoldUrl: sourceHanSerifScSemiBoldOtf
+  })
+
+  if (sheet.innerHTML !== fontFaceText) {
+    sheet.innerHTML = fontFaceText
+  }
+
+  preloadBundledFonts()
 }
 
 export const addElementStyle = () => {
@@ -160,5 +204,6 @@ export const addElementStyle = () => {
 export const addStyles = options => {
   const { theme } = options
   addThemeStyle(theme)
+  addBundledFontStyle()
   addCommonStyle(options)
 }

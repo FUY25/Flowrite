@@ -97,7 +97,7 @@
 html, body {
   font-family: "Open Sans", "Clear Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.4;
 }
 
 span code,
@@ -564,7 +564,7 @@ kbd {
   pre.ag-paragraph {
     overflow: visible;
     font-size: 90%;
-    line-height: 1.6;
+    line-height: 1.4;
     background: var(--codeBlockBgColor);
     border: 1px solid var(--editorColor10);
     border-radius: 3px;

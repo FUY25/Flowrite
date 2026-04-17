@@ -3,6 +3,7 @@ export const PATH_SEPARATOR = path.sep
 
 export const THEME_STYLE_ID = 'ag-theme'
 export const COMMON_STYLE_ID = 'ag-common-style'
+export const COMMON_FONT_STYLE_ID = 'ag-common-font-style'
 
 export const FLOWRITE_PRIMARY_WRITING_FONT = 'Flowrite EB Garamond'
 export const FLOWRITE_SECONDARY_WRITING_FONT = 'Flowrite Source Han Serif SC'

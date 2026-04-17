@@ -16,12 +16,20 @@
           :onChange="value => onSelectChange('fontSize', value)"
         ></range>
         <range
-          description="Line height"
+          description="Line spacing"
           :value="lineHeight"
           :min="1.2"
-          :max="2.0"
+          :max="3.0"
           :step="0.1"
           :onChange="value => onSelectChange('lineHeight', value)"
+        ></range>
+        <range
+          description="Writing font weight"
+          :value="writingFontWeight"
+          :min="400"
+          :max="600"
+          :step="25"
+          :onChange="value => onSelectChange('writingFontWeight', value)"
         ></range>
         <range
           description="Workspace Background Warmth"
@@ -247,6 +255,7 @@ export default {
       secondaryWritingFont: state => state.preferences.secondaryWritingFont,
       discussionFont: state => state.preferences.discussionFont,
       lineHeight: state => state.preferences.lineHeight,
+      writingFontWeight: state => state.preferences.writingFontWeight,
       workspaceBackgroundWarmth: state => state.preferences.workspaceBackgroundWarmth,
       autoPairBracket: state => state.preferences.autoPairBracket,
       autoPairMarkdownSyntax: state => state.preferences.autoPairMarkdownSyntax,

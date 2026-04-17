@@ -103,12 +103,19 @@
     "minimum": 12,
     "default": 16
   },
-  "lineHeight": {
-    "description": "Editor--Line Height",
+  "writingFontWeight": {
+    "description": "Editor--Writing font weight",
     "type": "number",
-    "maximum": 2,
+    "maximum": 600,
+    "minimum": 400,
+    "default": 475
+  },
+  "lineHeight": {
+    "description": "Editor--Line Spacing",
+    "type": "number",
+    "maximum": 3,
     "minimum": 1.2,
-    "default": 1.6
+    "default": 1.4
   },
   "editorLineWidth": {
     "description": "Editor--Defines the maximum editor area width. An empty string or suffixes of ch (characters), px (pixels) or % (percentage) are allowed.",

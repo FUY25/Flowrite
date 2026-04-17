@@ -472,6 +472,7 @@ export default {
     height: 38px;
     border: 0;
     background: transparent;
+    font-family: inherit;
     color: var(--editorColor80);
     font-size: 13px;
     line-height: 38px;

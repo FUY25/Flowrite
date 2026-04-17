@@ -212,7 +212,7 @@ export default {
       }
 
       const paneWidth = this.effectiveSideBarWidth
-      const paneColor = 'color-mix(in srgb, var(--sideBarBgColor) 88%, var(--workspaceHeaderBgColor) 12%)'
+      const paneColor = 'var(--workspaceSidebarBgColor)'
       const barColor = 'var(--workspaceHeaderBgColor)'
 
       return {
