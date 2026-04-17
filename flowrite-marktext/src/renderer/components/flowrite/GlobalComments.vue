@@ -3,6 +3,7 @@
     v-if="shouldRender"
     class="flowrite-global-comments"
     :class="{ 'is-distraction-hidden': isSuppressedByWritingMode }"
+    :style="{ fontFamily: discussionFontFamily }"
     data-testid="flowrite-global-comments"
     @mouseenter="isRevealActive = true"
     @mouseleave="isRevealActive = false"
@@ -108,6 +109,7 @@ import {
   getFlowriteCommentAuthorLabel,
   getFlowriteCommentAvatar
 } from '../../../flowrite/commentUi'
+import { buildDiscussionFontFamily } from '../../util/typography'
 
 export default {
   data () {
@@ -122,6 +124,7 @@ export default {
   computed: {
     ...mapState({
       currentFile: state => state.editor.currentFile,
+      discussionFont: state => state.preferences.discussionFont,
       comments: state => state.flowrite.comments,
       availability: state => state.flowrite.availability,
       runtime: state => state.flowrite.runtime,
@@ -130,6 +133,12 @@ export default {
 
     shouldRender () {
       return Boolean(this.currentFile && this.currentFile.pathname)
+    },
+
+    discussionFontFamily () {
+      return buildDiscussionFontFamily({
+        discussionFont: this.discussionFont
+      })
     },
 
     globalThread () {

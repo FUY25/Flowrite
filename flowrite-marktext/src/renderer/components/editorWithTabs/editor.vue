@@ -2,8 +2,7 @@
   <div
     class="editor-wrapper"
     :class="[{ 'typewriter': typewriter, 'focus': focus, 'source': sourceCode }]"
-    :style="{ 'lineHeight': lineHeight, 'fontSize': `${fontSize}px`,
-    'font-family': editorFontFamily ? `${editorFontFamily}, ${defaultFontFamily}` : `${defaultFontFamily}` }"
+    :style="{ 'lineHeight': lineHeight, 'fontSize': `${fontSize}px`, 'font-family': writingFontFamily }"
     :dir="textDirection"
   >
     <div
@@ -127,7 +126,6 @@ import MarginCommentDots from '../flowrite/MarginCommentDots.vue'
 import MarginAnchorHighlights from '../flowrite/MarginAnchorHighlights.vue'
 import Search from '../search'
 import bus from '@/bus'
-import { DEFAULT_EDITOR_FONT_FAMILY } from '@/config'
 import notice from '@/services/notification'
 import Printer from '@/services/printService'
 import { SpellcheckerLanguageCommand } from '@/commands'
@@ -137,6 +135,7 @@ import { moveImageToFolder, moveToRelativeFolder, uploadImage } from '@/util/fil
 import { guessClipboardFilePath } from '@/util/clipboard'
 import { getCssForOptions, getHtmlToc } from '@/util/pdf'
 import { addCommonStyle, setEditorWidth } from '@/util/theme'
+import { buildWritingFontFamily } from '@/util/typography'
 import { getMarginRailWidthForViewport } from '../../store/layout'
 
 import 'muya/themes/default.css'
@@ -182,11 +181,12 @@ export default {
       isGitlabCompatibilityEnabled: state => state.preferences.isGitlabCompatibilityEnabled,
       lineHeight: state => state.preferences.lineHeight,
       fontSize: state => state.preferences.fontSize,
+      primaryWritingFont: state => state.preferences.primaryWritingFont,
+      secondaryWritingFont: state => state.preferences.secondaryWritingFont,
       codeFontSize: state => state.preferences.codeFontSize,
       codeFontFamily: state => state.preferences.codeFontFamily,
       codeBlockLineNumbers: state => state.preferences.codeBlockLineNumbers,
       trimUnnecessaryCodeBlockEmptyLines: state => state.preferences.trimUnnecessaryCodeBlockEmptyLines,
-      editorFontFamily: state => state.preferences.editorFontFamily,
       hideQuickInsertHint: state => state.preferences.hideQuickInsertHint,
       hideLinkPopup: state => state.preferences.hideLinkPopup,
       autoCheck: state => state.preferences.autoCheck,
@@ -222,11 +222,17 @@ export default {
       })
 
       return hasMarginComments || Boolean(this.composerMarginThread)
+    },
+
+    writingFontFamily () {
+      return buildWritingFontFamily({
+        primaryWritingFont: this.primaryWritingFont,
+        secondaryWritingFont: this.secondaryWritingFont
+      })
     }
   },
 
   data () {
-    this.defaultFontFamily = DEFAULT_EDITOR_FONT_FAMILY
     this.CloseIcon = CloseIcon
 
     return {

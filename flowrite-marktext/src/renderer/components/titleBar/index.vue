@@ -14,7 +14,7 @@
       ]"
       :style="titleBarBackgroundStyle"
     >
-      <div class="title" @dblclick.stop="toggleMaxmizeOnMacOS">
+      <div class="title" :style="{ fontFamily: writingFontFamily }" @dblclick.stop="toggleMaxmizeOnMacOS">
         <span v-if="!filename">MarkText</span>
         <span v-else>
           <span
@@ -131,6 +131,7 @@ import { mapState, mapGetters } from 'vuex'
 import { minimizePath, restorePath, maximizePath, closePath } from '../../assets/window-controls.js'
 import { PATH_SEPARATOR } from '../../config'
 import { isOsx } from '@/util'
+import { buildWritingFontFamily } from '@/util/typography'
 import FlowriteToolbar from '../flowrite/Toolbar.vue'
 import bus from '../../bus'
 
@@ -190,6 +191,8 @@ export default {
     ]),
     ...mapState({
       titleBarStyle: state => state.preferences.titleBarStyle,
+      primaryWritingFont: state => state.preferences.primaryWritingFont,
+      secondaryWritingFont: state => state.preferences.secondaryWritingFont,
       showSideBar: state => state.layout.showSideBar,
       distractionFreeWriting: state => state.layout.distractionFreeWriting
     }),
@@ -215,6 +218,12 @@ export default {
       return {
         background: `linear-gradient(to right, ${paneColor} 0, ${paneColor} ${paneWidth}px, ${barColor} ${paneWidth}px, ${barColor} 100%)`
       }
+    },
+    writingFontFamily () {
+      return buildWritingFontFamily({
+        primaryWritingFont: this.primaryWritingFont,
+        secondaryWritingFont: this.secondaryWritingFont
+      })
     },
     hideForWriting () {
       return this.distractionFreeWriting && !this.topRevealActive

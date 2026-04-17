@@ -1,12 +1,20 @@
 import { expect } from 'chai'
-import {
+import { createRequire } from 'module'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const require = createRequire(import.meta.url)
+const {
   getDefaultPrimaryWritingFont,
   getDefaultSecondaryWritingFont,
   getDefaultDiscussionFont,
   buildWritingFontFamily,
   buildDiscussionFontFamily,
   migrateLegacyEditorFontFamily
-} from '../../../src/renderer/util/typography'
+} = require('../../../src/renderer/util/typography')
+
+const specDirectory = path.dirname(fileURLToPath(import.meta.url))
 
 describe('Renderer typography utility', function () {
   it('exposes the bundled primary and secondary writing defaults', function () {
@@ -47,5 +55,21 @@ describe('Renderer typography utility', function () {
       secondaryWritingFont: getDefaultSecondaryWritingFont(),
       discussionFont: 'system-ui'
     })
+  })
+
+  it('wires the shared writing stack into the editor and title surfaces', function () {
+    const editorSource = fs.readFileSync(
+      path.resolve(specDirectory, '../../../src/renderer/components/editorWithTabs/editor.vue'),
+      'utf8'
+    )
+    const titleBarSource = fs.readFileSync(
+      path.resolve(specDirectory, '../../../src/renderer/components/titleBar/index.vue'),
+      'utf8'
+    )
+
+    expect(editorSource).to.include('buildWritingFontFamily')
+    expect(editorSource).to.include("'font-family': writingFontFamily")
+    expect(titleBarSource).to.include('buildWritingFontFamily')
+    expect(titleBarSource).to.include('fontFamily: writingFontFamily')
   })
 })

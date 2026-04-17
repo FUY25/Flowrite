@@ -9,6 +9,7 @@
       },
       { 'is-static': !positioned }
     ]"
+    :style="{ fontFamily: discussionFontFamily }"
     :data-thread-id="thread ? thread.id : composerThreadId"
     :data-testid="composer ? null : 'flowrite-margin-thread'"
     @click="handleCardClick"
@@ -130,6 +131,7 @@ import {
   getFlowriteCommentAuthorLabel,
   getFlowriteCommentAvatar
 } from '../../../flowrite/commentUi'
+import { buildDiscussionFontFamily, getDefaultDiscussionFont } from '../../util/typography'
 
 export default {
   props: {
@@ -228,6 +230,16 @@ export default {
 
     trimmedReplyDraft () {
       return this.replyDraft.trim()
+    },
+
+    discussionFontFamily () {
+      const discussionFont = this.$store && this.$store.state && this.$store.state.preferences
+        ? this.$store.state.preferences.discussionFont
+        : getDefaultDiscussionFont()
+
+      return buildDiscussionFontFamily({
+        discussionFont
+      })
     },
 
     isInputPending () {
