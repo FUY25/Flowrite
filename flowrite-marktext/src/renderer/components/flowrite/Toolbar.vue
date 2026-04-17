@@ -190,6 +190,7 @@ export default {
     gap: 8px;
     padding: 5px 18px 1px;
     background: var(--workspaceHeaderBgColor);
+    transition: background-color .14s linear;
   }
 
   .flowrite-toolbar--inline {

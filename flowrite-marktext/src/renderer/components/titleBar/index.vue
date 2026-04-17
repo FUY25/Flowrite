@@ -361,6 +361,7 @@ export default {
     left: 0;
     top: 0;
     right: 0;
+    transition: background .14s linear;
   }
   .title-bar {
     -webkit-app-region: drag;
@@ -374,7 +375,7 @@ export default {
     top: 0;
     right: 0;
     z-index: 2;
-    transition: color .4s ease-in-out;
+    transition: background .14s linear, color .4s ease-in-out;
     cursor: default;
   }
   .active {

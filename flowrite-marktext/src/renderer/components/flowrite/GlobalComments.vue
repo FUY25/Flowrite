@@ -325,7 +325,7 @@ export default {
   .flowrite-global-comments {
     background: var(--workspacePanelBgColor);
     padding: 0 22px 18px;
-    transition: padding .18s ease;
+    transition: background-color .14s linear, padding .18s ease;
   }
 
   .flowrite-global-comments__content,
@@ -440,6 +440,7 @@ export default {
     border: 1px solid rgba(28, 33, 44, 0.11);
     border-radius: 10px;
     background: color-mix(in srgb, var(--workspacePanelBgColor) 92%, white 8%);
+    transition: background-color .14s linear, border-color .14s linear;
   }
 
   .flowrite-global-comments__empty {

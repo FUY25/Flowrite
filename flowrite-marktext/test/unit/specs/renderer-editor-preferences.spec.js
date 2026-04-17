@@ -97,6 +97,7 @@ describe('Renderer editor preferences', function () {
     expect(editorPreferencesSource).to.include(':max="3.0"')
     expect(editorPreferencesSource).to.include('Writing font weight')
     expect(editorPreferencesSource).to.include(':value="writingFontWeight"')
+    expect(editorPreferencesSource).to.include(":onChange=\"value => onSelectChange('workspaceBackgroundWarmth', value)\"")
     expect(editorPreferencesSource).to.include('Primary Writing Font')
     expect(editorPreferencesSource).to.include('Secondary Writing Font')
     expect(editorPreferencesSource).to.include('Discussion Font')

@@ -287,6 +287,7 @@ export default {
     color: var(--sideBarColor);
     user-select: none;
     background: var(--workspaceSidebarBgColor);
+    transition: background-color .14s linear;
   }
 
   .side-bar__pane {

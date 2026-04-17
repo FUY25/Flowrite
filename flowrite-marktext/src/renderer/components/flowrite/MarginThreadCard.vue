@@ -477,6 +477,7 @@ export default {
     box-shadow: 0 8px 22px rgba(26, 33, 44, 0.06);
     padding: 14px 16px 14px;
     cursor: pointer;
+    transition: background-color .14s linear, border-color .14s linear, box-shadow .14s linear;
   }
 
   .flowrite-margin-thread-card.is-active .flowrite-margin-thread-card__surface {
@@ -550,6 +551,7 @@ export default {
     font-size: 11px;
     font-weight: 700;
     color: rgba(120, 126, 138, 0.88);
+    transition: background-color .14s linear, border-color .14s linear;
   }
 
   .flowrite-margin-thread-card__copy {
@@ -655,6 +657,7 @@ export default {
     width: 28px;
     height: 28px;
     padding: 0;
+    transition: background-color .14s linear, color .14s linear;
   }
 
   .flowrite-margin-thread-card__submit:disabled {

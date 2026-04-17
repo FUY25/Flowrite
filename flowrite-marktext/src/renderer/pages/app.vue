@@ -239,6 +239,7 @@ export default {
   }
   .editor-placeholder {
     background: var(--workspaceBgColor);
+    transition: background-color .14s linear;
   }
   .editor-middle {
     display: flex;
@@ -246,6 +247,7 @@ export default {
     flex: 1;
     min-height: 100vh;
     position: relative;
+    transition: background-color .14s linear;
     & > .editor {
       flex: 1;
     }
