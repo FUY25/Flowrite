@@ -3,6 +3,7 @@
     v-if="shouldRender"
     class="flowrite-global-comments"
     :class="{ 'is-distraction-hidden': isSuppressedByWritingMode }"
+    :style="{ fontFamily: discussionFontFamily }"
     data-testid="flowrite-global-comments"
     @mouseenter="isRevealActive = true"
     @mouseleave="isRevealActive = false"
@@ -108,6 +109,7 @@ import {
   getFlowriteCommentAuthorLabel,
   getFlowriteCommentAvatar
 } from '../../../flowrite/commentUi'
+import { buildDiscussionFontFamily } from '../../util/typography'
 
 export default {
   data () {
@@ -122,6 +124,7 @@ export default {
   computed: {
     ...mapState({
       currentFile: state => state.editor.currentFile,
+      discussionFont: state => state.preferences.discussionFont,
       comments: state => state.flowrite.comments,
       availability: state => state.flowrite.availability,
       runtime: state => state.flowrite.runtime,
@@ -130,6 +133,12 @@ export default {
 
     shouldRender () {
       return Boolean(this.currentFile && this.currentFile.pathname)
+    },
+
+    discussionFontFamily () {
+      return buildDiscussionFontFamily({
+        discussionFont: this.discussionFont
+      })
     },
 
     globalThread () {
@@ -316,7 +325,7 @@ export default {
   .flowrite-global-comments {
     background: var(--workspacePanelBgColor);
     padding: 0 22px 18px;
-    transition: padding .18s ease;
+    transition: background-color .14s linear, padding .18s ease;
   }
 
   .flowrite-global-comments__content,
@@ -431,6 +440,7 @@ export default {
     border: 1px solid rgba(28, 33, 44, 0.11);
     border-radius: 10px;
     background: color-mix(in srgb, var(--workspacePanelBgColor) 92%, white 8%);
+    transition: background-color .14s linear, border-color .14s linear;
   }
 
   .flowrite-global-comments__empty {
@@ -463,6 +473,7 @@ export default {
     height: 38px;
     border: 0;
     background: transparent;
+    font-family: inherit;
     color: var(--editorColor80);
     font-size: 13px;
     line-height: 38px;

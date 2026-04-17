@@ -19,7 +19,7 @@
 
   --highlightColor: rgba(33, 181, 111, .4);
   --selectionColor: rgba(0, 0, 0, .1);
-  --editorColor: rgba(0, 0, 0, .7);
+  --editorColor: rgba(0, 0, 0, 1);
   --editorColor80: rgba(0, 0, 0, .8);
   --editorColor60: rgba(0, 0, 0, .6);
   --editorColor50: rgba(0, 0, 0, .5);
@@ -31,6 +31,7 @@
   --workspaceBgColor: var(--editorBgColor);
   --workspacePanelBgColor: var(--editorBgColor);
   --workspaceHeaderBgColor: var(--editorBgColor);
+  --workspaceSidebarBgColor: color-mix(in srgb, var(--sideBarBgColor) 88%, var(--editorBgColor) 12%);
   --deleteColor: #ff6969;
   --iconColor: #6B737B;
   --codeBgColor: #d8d8d869;

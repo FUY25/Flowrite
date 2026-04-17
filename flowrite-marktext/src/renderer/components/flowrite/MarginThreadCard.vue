@@ -9,6 +9,7 @@
       },
       { 'is-static': !positioned }
     ]"
+    :style="{ fontFamily: discussionFontFamily }"
     :data-thread-id="thread ? thread.id : composerThreadId"
     :data-testid="composer ? null : 'flowrite-margin-thread'"
     @click="handleCardClick"
@@ -130,6 +131,7 @@ import {
   getFlowriteCommentAuthorLabel,
   getFlowriteCommentAvatar
 } from '../../../flowrite/commentUi'
+import { buildDiscussionFontFamily, getDefaultDiscussionFont } from '../../util/typography'
 
 export default {
   props: {
@@ -228,6 +230,16 @@ export default {
 
     trimmedReplyDraft () {
       return this.replyDraft.trim()
+    },
+
+    discussionFontFamily () {
+      const discussionFont = this.$store && this.$store.state && this.$store.state.preferences
+        ? this.$store.state.preferences.discussionFont
+        : getDefaultDiscussionFont()
+
+      return buildDiscussionFontFamily({
+        discussionFont
+      })
     },
 
     isInputPending () {
@@ -465,6 +477,7 @@ export default {
     box-shadow: 0 8px 22px rgba(26, 33, 44, 0.06);
     padding: 14px 16px 14px;
     cursor: pointer;
+    transition: background-color .14s linear, border-color .14s linear, box-shadow .14s linear;
   }
 
   .flowrite-margin-thread-card.is-active .flowrite-margin-thread-card__surface {
@@ -538,6 +551,7 @@ export default {
     font-size: 11px;
     font-weight: 700;
     color: rgba(120, 126, 138, 0.88);
+    transition: background-color .14s linear, border-color .14s linear;
   }
 
   .flowrite-margin-thread-card__copy {
@@ -608,6 +622,7 @@ export default {
     border: none;
     border-radius: 0;
     background: transparent;
+    font-family: inherit;
     color: rgba(54, 60, 70, 0.92);
     font-size: 13px;
     line-height: 1.55;
@@ -642,6 +657,7 @@ export default {
     width: 28px;
     height: 28px;
     padding: 0;
+    transition: background-color .14s linear, color .14s linear;
   }
 
   .flowrite-margin-thread-card__submit:disabled {

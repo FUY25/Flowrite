@@ -130,6 +130,7 @@ export default {
     flex-direction: column;
     overflow: hidden;
     background: var(--workspaceBgColor);
+    transition: background-color .14s linear;
     & > .container {
       flex: 1;
       min-height: 0;

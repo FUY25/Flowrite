@@ -1,5 +1,11 @@
 import { ipcRenderer } from 'electron'
 import bus from '../bus'
+import {
+  getDefaultDiscussionFont,
+  getDefaultPrimaryWritingFont,
+  getDefaultSecondaryWritingFont,
+  migrateLegacyEditorFontFamily
+} from '../util/typography'
 
 // user preference
 const state = {
@@ -17,8 +23,12 @@ const state = {
   language: 'en',
 
   editorFontFamily: 'Open Sans',
+  primaryWritingFont: getDefaultPrimaryWritingFont(),
+  secondaryWritingFont: getDefaultSecondaryWritingFont(),
+  discussionFont: getDefaultDiscussionFont(),
   fontSize: 16,
-  lineHeight: 1.6,
+  writingFontWeight: 475,
+  lineHeight: 1.4,
   workspaceBackgroundWarmth: 0,
   codeFontSize: 14,
   codeFontFamily: 'DejaVu Sans Mono',
@@ -110,13 +120,35 @@ const state = {
 
 const getters = {}
 
+const applyPreferenceValue = (state, key, value) => {
+  if (typeof value !== 'undefined' && typeof state[key] !== 'undefined') {
+    state[key] = value
+  }
+}
+
 const mutations = {
   SET_USER_PREFERENCE (state, preference) {
     Object.keys(preference).forEach(key => {
-      if (typeof preference[key] !== 'undefined' && typeof state[key] !== 'undefined') {
-        state[key] = preference[key]
-      }
+      applyPreferenceValue(state, key, preference[key])
     })
+
+    const hasLegacyEditorFontFamily = typeof preference.editorFontFamily === 'string' && preference.editorFontFamily.trim() !== ''
+    const hasExplicitPrimaryWritingFont = typeof preference.primaryWritingFont === 'string' && preference.primaryWritingFont.trim() !== ''
+    const hasExplicitSecondaryWritingFont = typeof preference.secondaryWritingFont === 'string' && preference.secondaryWritingFont.trim() !== ''
+    const hasExplicitDiscussionFont = typeof preference.discussionFont === 'string' && preference.discussionFont.trim() !== ''
+
+    if (hasLegacyEditorFontFamily) {
+      const migratedTypography = migrateLegacyEditorFontFamily(preference.editorFontFamily)
+      if (!hasExplicitPrimaryWritingFont) {
+        state.primaryWritingFont = migratedTypography.primaryWritingFont
+      }
+      if (!hasExplicitSecondaryWritingFont) {
+        state.secondaryWritingFont = migratedTypography.secondaryWritingFont
+      }
+      if (!hasExplicitDiscussionFont) {
+        state.discussionFont = migratedTypography.discussionFont
+      }
+    }
   },
   SET_MODE (state, { type, checked }) {
     state[type] = checked

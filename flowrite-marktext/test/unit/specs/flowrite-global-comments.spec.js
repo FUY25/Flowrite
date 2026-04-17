@@ -20,6 +20,11 @@ const createStore = (pathname = '/notes/first.md') => {
           }
         }
       },
+      preferences: {
+        state: {
+          discussionFont: 'PingFang SC'
+        }
+      },
       flowrite: {
         state: {
           comments: [],
@@ -168,6 +173,44 @@ describe('Flowrite global comments', function () {
 
       const header = vm.$el.querySelector('.flowrite-global-comments__header')
       expect(window.getComputedStyle(header).marginBottom).to.equal('20px')
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
+
+  it('applies the shared discussion font to the discussion surface', async function () {
+    const store = createStore()
+    const vm = mountGlobalComments(store)
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+
+      expect(vm.$el.style.fontFamily).to.include('PingFang SC')
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
+
+  it('inherits the shared discussion font in the composer input', async function () {
+    const store = createStore()
+    store.state.preferences.discussionFont = 'serif'
+    const vm = mountGlobalComments(store)
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+
+      const rootFontFamily = window.getComputedStyle(vm.$el).fontFamily
+      const input = vm.$el.querySelector('.flowrite-global-comments__input')
+      expect(input).to.not.equal(null)
+      expect(window.getComputedStyle(input).fontFamily).to.equal(rootFontFamily)
     } finally {
       if (vm.$el && vm.$el.parentNode === document.body) {
         document.body.removeChild(vm.$el)

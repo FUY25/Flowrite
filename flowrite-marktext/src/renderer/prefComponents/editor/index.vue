@@ -16,12 +16,20 @@
           :onChange="value => onSelectChange('fontSize', value)"
         ></range>
         <range
-          description="Line height"
+          description="Line spacing"
           :value="lineHeight"
           :min="1.2"
-          :max="2.0"
+          :max="3.0"
           :step="0.1"
           :onChange="value => onSelectChange('lineHeight', value)"
+        ></range>
+        <range
+          description="Writing font weight"
+          :value="writingFontWeight"
+          :min="400"
+          :max="600"
+          :step="25"
+          :onChange="value => onSelectChange('writingFontWeight', value)"
         ></range>
         <range
           description="Workspace Background Warmth"
@@ -32,9 +40,22 @@
           :onChange="value => onSelectChange('workspaceBackgroundWarmth', value)"
         ></range>
         <font-text-box
-          description="Font family"
-          :value="editorFontFamily"
-          :onChange="value => onSelectChange('editorFontFamily', value)"
+          description="Primary Writing Font"
+          :presets="primaryWritingFontPresets"
+          :value="primaryWritingFont"
+          :onChange="value => onSelectChange('primaryWritingFont', value)"
+        ></font-text-box>
+        <font-text-box
+          description="Secondary Writing Font"
+          :presets="secondaryWritingFontPresets"
+          :value="secondaryWritingFont"
+          :onChange="value => onSelectChange('secondaryWritingFont', value)"
+        ></font-text-box>
+        <font-text-box
+          description="Discussion Font"
+          :presets="discussionFontPresets"
+          :value="discussionFont"
+          :onChange="value => onSelectChange('discussionFont', value)"
         ></font-text-box>
         <text-box
           description="Maximum width of text editor"
@@ -205,13 +226,36 @@ export default {
     this.textDirectionOptions = textDirectionOptions
     this.trimTrailingNewlineOptions = trimTrailingNewlineOptions
     this.defaultEncodingOptions = getDefaultEncodingOptions()
+    this.primaryWritingFontPresets = [
+      'Flowrite EB Garamond',
+      'Times New Roman',
+      'serif',
+      'sans-serif'
+    ]
+    this.secondaryWritingFontPresets = [
+      'Flowrite Source Han Serif SC',
+      'Songti SC',
+      'PingFang SC',
+      'serif',
+      'sans-serif'
+    ]
+    this.discussionFontPresets = [
+      'system-ui',
+      'PingFang SC',
+      'Helvetica Neue',
+      'Arial',
+      'sans-serif'
+    ]
     return {}
   },
   computed: {
     ...mapState({
       fontSize: state => state.preferences.fontSize,
-      editorFontFamily: state => state.preferences.editorFontFamily,
+      primaryWritingFont: state => state.preferences.primaryWritingFont,
+      secondaryWritingFont: state => state.preferences.secondaryWritingFont,
+      discussionFont: state => state.preferences.discussionFont,
       lineHeight: state => state.preferences.lineHeight,
+      writingFontWeight: state => state.preferences.writingFontWeight,
       workspaceBackgroundWarmth: state => state.preferences.workspaceBackgroundWarmth,
       autoPairBracket: state => state.preferences.autoPairBracket,
       autoPairMarkdownSyntax: state => state.preferences.autoPairMarkdownSyntax,

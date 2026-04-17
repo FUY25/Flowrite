@@ -250,7 +250,7 @@ export const EXPORT_DOMPURIFY_CONFIG = Object.freeze({
 
 export const MUYA_DEFAULT_OPTION = Object.freeze({
   fontSize: 16,
-  lineHeight: 1.6,
+  lineHeight: 1.4,
   focusMode: false,
   markdown: '',
   // Whether to trim the beginning and ending empty line in code block when open markdown.
