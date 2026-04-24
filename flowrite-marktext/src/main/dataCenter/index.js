@@ -14,6 +14,7 @@ import { getOnlineStatus } from '../flowrite/network/status'
 import { loadDocumentRecord } from '../flowrite/files/documentStore'
 import { loadComments } from '../flowrite/files/commentsStore'
 import { loadSuggestions } from '../flowrite/files/suggestionsStore'
+import { listSnapshots, loadSnapshot } from '../flowrite/files/snapshotStore'
 
 const DATA_CENTER_NAME = 'dataCenter'
 
@@ -313,6 +314,18 @@ class DataCenter extends EventEmitter {
 
     ipcMain.handle('mt::flowrite:finalize-suggestions-after-save', async (e, payload = {}) => {
       return this.flowriteController.finalizeAcceptedSuggestionsAfterSave(payload)
+    })
+
+    ipcMain.handle('mt::flowrite:list-version-history', async (e, { pathname } = {}) => {
+      if (!pathname) {
+        return []
+      }
+
+      return listSnapshots(pathname)
+    })
+
+    ipcMain.handle('mt::flowrite:load-version-snapshot', async (e, { pathname, snapshotId } = {}) => {
+      return loadSnapshot(pathname, snapshotId)
     })
 
     // TODO: Replace sync. call.

@@ -1,6 +1,7 @@
 import fs from 'fs'
 import { FlowriteRuntimeManager } from './ai/runtimeManager'
 import { loadDocumentRecord } from './files/documentStore'
+import { cloneMarginAnchor } from '../../flowrite/anchors'
 import {
   FLOWRITE_GLOBAL_THREAD_ID,
   appendCommentToThread,
@@ -37,6 +38,15 @@ import { resolveNextThreadMode } from './ai/collaborationRouting.js'
 import { applyCommentGuardrails } from './ai/commentGuardrails.js'
 
 const FLOWRITE_TEST_CLIENT_MODULE = process.env.FLOWRITE_TEST_CLIENT_MODULE || ''
+
+const serializeInFlightAnchor = anchor => {
+  const normalizedAnchor = cloneMarginAnchor(anchor)
+  if (!normalizedAnchor || !normalizedAnchor.start || !normalizedAnchor.end || !normalizedAnchor.quote) {
+    return null
+  }
+
+  return normalizedAnchor
+}
 
 const isWindowAlive = browserWindow => {
   return browserWindow && !browserWindow.isDestroyed() && browserWindow.webContents && !browserWindow.webContents.isDestroyed()
@@ -143,7 +153,10 @@ export class FlowriteController {
       return {
         ok: true,
         threadId: thread.id,
-        commentId: comment.id
+        commentId: comment.id,
+        anchor: thread.scope === SCOPE_MARGIN
+          ? cloneMarginAnchor(thread.anchor)
+          : null
       }
     }
 
@@ -441,6 +454,24 @@ export class FlowriteController {
     }
 
     let createdCommentCount = 0
+    const inFlightAnchors = []
+    const inFlightAnchorKeys = new Set()
+
+    const trackInFlightAnchor = anchor => {
+      const normalizedAnchor = serializeInFlightAnchor(anchor)
+      if (!normalizedAnchor) {
+        return
+      }
+
+      const key = JSON.stringify(normalizedAnchor)
+      if (inFlightAnchorKeys.has(key)) {
+        return
+      }
+
+      inFlightAnchorKeys.add(key)
+      inFlightAnchors.push(normalizedAnchor)
+    }
+
     return this._runWithProgress({
       browserWindow,
       pathname,
@@ -468,6 +499,7 @@ export class FlowriteController {
         }
 
         createdCommentCount += 1
+        trackInFlightAnchor(event.payload.result && event.payload.result.anchor)
         await this.sendPersistedRefresh(browserWindow, pathname)
         this.sendRuntimeProgress(browserWindow, {
           ready: true,
@@ -475,6 +507,7 @@ export class FlowriteController {
           status: RUNTIME_STATUS_RUNNING,
           phase: PHASE_AI_REVIEW,
           message: `Flowrite added ${createdCommentCount} review comment${createdCommentCount === 1 ? '' : 's'}...`,
+          inFlightAnchors: inFlightAnchors.map(anchor => cloneMarginAnchor(anchor)),
           error: null
         })
       }

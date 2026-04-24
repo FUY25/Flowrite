@@ -101,6 +101,7 @@ import { mapState } from 'vuex'
 import {
   SCOPE_GLOBAL,
   AUTHOR_USER,
+  PHASE_AI_REVIEW,
   RUNTIME_STATUS_RUNNING,
   RUNTIME_STATUS_FAILED
 } from '../../../flowrite/constants'
@@ -139,6 +140,10 @@ export default {
 
     isRunning () {
       return this.runtime.status === RUNTIME_STATUS_RUNNING
+    },
+
+    isReviewRunning () {
+      return this.runtime.phase === PHASE_AI_REVIEW && this.isRunning
     },
 
     isExpanded () {
@@ -184,6 +189,10 @@ export default {
 
       if (this.runtime.status === RUNTIME_STATUS_FAILED && this.runtime.error && this.runtime.error.message) {
         return this.runtime.error.message
+      }
+
+      if (this.isReviewRunning) {
+        return this.runtime.message || 'Flowrite is reviewing the whole draft...'
       }
 
       if (this.isRunning) {

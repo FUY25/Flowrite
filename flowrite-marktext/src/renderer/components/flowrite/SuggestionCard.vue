@@ -7,15 +7,36 @@
     <p class="flowrite-suggestion-card__eyebrow">
       {{ statusLabel }}
     </p>
-    <p class="flowrite-suggestion-card__text" data-testid="flowrite-suggestion-text">
-      {{ suggestion.suggestedText }}
-    </p>
+
+    <div v-if="hasTargetText" class="flowrite-suggestion-card__section">
+      <p class="flowrite-suggestion-card__label">Selected text</p>
+      <p class="flowrite-suggestion-card__target" data-testid="flowrite-suggestion-target">
+        {{ suggestion.targetText }}
+      </p>
+    </div>
+
+    <div class="flowrite-suggestion-card__section">
+      <p class="flowrite-suggestion-card__label">Suggested rewrite</p>
+      <p class="flowrite-suggestion-card__text" data-testid="flowrite-suggestion-text">
+        {{ suggestion.suggestedText }}
+      </p>
+    </div>
+
     <p
       v-if="suggestion.rationale"
       class="flowrite-suggestion-card__rationale"
     >
       {{ suggestion.rationale }}
     </p>
+
+    <p
+      v-if="showSaveHint"
+      class="flowrite-suggestion-card__meta"
+      data-testid="flowrite-suggestion-save-hint"
+    >
+      Save or autosave to lock this rewrite into history.
+    </p>
+
     <div
       v-if="showActions"
       class="flowrite-suggestion-card__actions"
@@ -66,8 +87,16 @@ export default {
       return `status-${this.suggestion.status || SUGGESTION_STATUS_PENDING}`
     },
 
+    hasTargetText () {
+      return Boolean(this.suggestion && this.suggestion.targetText)
+    },
+
     showActions () {
       return this.suggestion.status === SUGGESTION_STATUS_PENDING
+    },
+
+    showSaveHint () {
+      return this.suggestion.status === SUGGESTION_STATUS_APPLIED_IN_BUFFER
     },
 
     statusLabel () {
@@ -99,7 +128,7 @@ export default {
   }
 
   .flowrite-suggestion-card__eyebrow {
-    margin: 0 0 6px;
+    margin: 0 0 8px;
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -107,8 +136,23 @@ export default {
     color: rgba(74, 86, 104, 0.78);
   }
 
+  .flowrite-suggestion-card__section + .flowrite-suggestion-card__section {
+    margin-top: 10px;
+  }
+
+  .flowrite-suggestion-card__label {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: rgba(102, 114, 133, 0.78);
+  }
+
+  .flowrite-suggestion-card__target,
   .flowrite-suggestion-card__text,
-  .flowrite-suggestion-card__rationale {
+  .flowrite-suggestion-card__rationale,
+  .flowrite-suggestion-card__meta {
     margin: 0;
     white-space: pre-wrap;
     font-size: 13px;
@@ -116,9 +160,25 @@ export default {
     color: #273142;
   }
 
+  .flowrite-suggestion-card__target {
+    padding-left: 10px;
+    border-left: 2px solid rgba(39, 49, 66, 0.14);
+    color: rgba(39, 49, 66, 0.78);
+  }
+
+  .flowrite-suggestion-card__text {
+    font-weight: 600;
+  }
+
   .flowrite-suggestion-card__rationale {
-    margin-top: 8px;
+    margin-top: 10px;
     color: rgba(39, 49, 66, 0.74);
+  }
+
+  .flowrite-suggestion-card__meta {
+    margin-top: 10px;
+    color: rgba(102, 114, 133, 0.86);
+    font-size: 12px;
   }
 
   .flowrite-suggestion-card__actions {
@@ -146,5 +206,10 @@ export default {
   .flowrite-suggestion-card__button:disabled {
     cursor: not-allowed;
     opacity: 0.65;
+  }
+
+  .flowrite-suggestion-card.status-applied_in_buffer {
+    border-color: rgba(210, 153, 51, 0.28);
+    background: rgba(252, 249, 240, 0.98);
   }
 </style>

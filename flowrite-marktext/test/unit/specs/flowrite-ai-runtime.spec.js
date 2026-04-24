@@ -291,7 +291,7 @@ describe('Flowrite AI runtime', function () {
     }
   })
 
-  it('builds cacheable stable context blocks and gateway-backed client defaults', function () {
+  it('builds cacheable stable context blocks and direct-Claude client defaults', function () {
     const request = buildRuntimeRequest({
       jobType: 'thread_reply',
       documentPath: '/tmp/draft.md',

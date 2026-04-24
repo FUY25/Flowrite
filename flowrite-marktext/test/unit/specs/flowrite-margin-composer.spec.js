@@ -25,6 +25,12 @@ const createStore = ({ submitAction, closeAction } = {}) => {
             }
             return Promise.resolve()
           },
+          REQUEST_SUGGESTION () {
+            if (typeof submitAction === 'function') {
+              return submitAction(...arguments)
+            }
+            return Promise.resolve()
+          },
           CLOSE_FLOWRITE_MARGIN_COMPOSER () {
             if (typeof closeAction === 'function') {
               return closeAction(...arguments)
@@ -137,6 +143,58 @@ describe('Flowrite margin composer', function () {
 
       resolveSubmit()
       await submitPromise
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
+
+  it('can request a rewrite suggestion from the composer without applying any edit yet', async function () {
+    let submitPayload = null
+    const store = createStore({
+      submitAction: (context, payload) => {
+        submitPayload = payload
+        return Promise.resolve([])
+      }
+    })
+    const anchor = {
+      quote: 'reflective paragraph',
+      start: {
+        key: 'p-1',
+        offset: 0
+      },
+      end: {
+        key: 'p-1',
+        offset: 20
+      }
+    }
+    const vm = mountComposer(store, anchor)
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+      const rewriteButton = vm.$el.querySelector('[data-testid="flowrite-margin-thread-mode-rewrite"]')
+      expect(rewriteButton).to.not.equal(null)
+      rewriteButton.click()
+      await Vue.nextTick()
+
+      const textarea = vm.$el.querySelector('[data-testid="flowrite-margin-thread-input"]')
+      expect(textarea).to.not.equal(null)
+      textarea.value = 'Make this more vivid.'
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+      await Vue.nextTick()
+
+      const submitButton = vm.$el.querySelector('[data-testid="flowrite-margin-thread-submit"]')
+      expect(submitButton).to.not.equal(null)
+      submitButton.click()
+      await Vue.nextTick()
+
+      expect(submitPayload).to.deep.equal({
+        body: 'Make this more vivid.',
+        anchor
+      })
     } finally {
       if (vm.$el && vm.$el.parentNode === document.body) {
         document.body.removeChild(vm.$el)

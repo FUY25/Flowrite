@@ -13,6 +13,10 @@ export const TERMINAL_SUGGESTION_STATUSES = new Set([
 export const SCOPE_GLOBAL = 'global'
 export const SCOPE_MARGIN = 'margin'
 
+// Direct Claude defaults for open-source Flowrite
+export const FLOWRITE_DEFAULT_DIRECT_CLAUDE_BASE_URL = 'https://api.anthropic.com'
+export const FLOWRITE_DEFAULT_DIRECT_CLAUDE_MODEL = 'claude-sonnet-4-6'
+
 // Collaboration modes
 export const FLOWRITE_COLLABORATION_MODE_COMMENT_ONLY = 'comment_only'
 export const FLOWRITE_COLLABORATION_MODE_COWRITING = 'cowriting'

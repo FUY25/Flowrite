@@ -9,7 +9,7 @@ import { normalizeAndResolvePath } from '../filesystem'
 import { createSidecarSaveTransaction, loadDocumentRecord, saveDocumentRecord } from '../flowrite/files/documentStore'
 import { saveComments } from '../flowrite/files/commentsStore'
 import { saveSuggestions } from '../flowrite/files/suggestionsStore'
-import { ensureSnapshotForAcceptedSuggestion } from '../flowrite/files/snapshotStore'
+import { ensureSnapshotForAcceptedSuggestion, recordDocumentSnapshot, SNAPSHOT_KIND_DOCUMENT_SAVE } from '../flowrite/files/snapshotStore'
 import { convertLineEndings } from './lineEndings'
 import { resolveMarkdownFilePath } from './markdownPaths'
 
@@ -84,8 +84,12 @@ export const writeMarkdownFile = (pathname, content, options, saveContext = {}) 
       snapshot
     } = flowrite
 
-    if (snapshot && snapshot.saveCycleId) {
-      await ensureSnapshotForAcceptedSuggestion(resolvedPath, snapshot.markdown || content, snapshot)
+    if (snapshot) {
+      if (snapshot.kind === SNAPSHOT_KIND_DOCUMENT_SAVE) {
+        await recordDocumentSnapshot(resolvedPath, snapshot.markdown || content, snapshot)
+      } else if (snapshot.saveCycleId) {
+        await ensureSnapshotForAcceptedSuggestion(resolvedPath, snapshot.markdown || content, snapshot)
+      }
     }
 
     if (document !== undefined) {

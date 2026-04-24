@@ -28,6 +28,7 @@ const createSafeStorage = () => ({
 
 describe('Flowrite settings', function () {
   afterEach(function () {
+    delete process.env.ANTHROPIC_API_KEY
     delete process.env.AI_GATEWAY_API_KEY
   })
 
@@ -138,6 +139,40 @@ describe('Flowrite settings', function () {
     expect(flowrite.reason).to.equal('unconfigured')
   })
 
+  it('defaults new Flowrite installs to the direct Claude Messages API', function () {
+    const settings = new FlowriteSettings({
+      store: new MemoryStore(),
+      safeStorage: createSafeStorage(),
+      getOnlineStatus: () => ({ online: true })
+    })
+
+    const runtimeConfig = settings.getRuntimeConfig()
+    const flowrite = settings.getPublicState()
+
+    expect(runtimeConfig.baseURL).to.equal('https://api.anthropic.com')
+    expect(runtimeConfig.model).to.equal('claude-sonnet-4-6')
+    expect(flowrite.baseURL).to.equal('https://api.anthropic.com')
+    expect(flowrite.model).to.equal('claude-sonnet-4-6')
+  })
+
+  it('treats ANTHROPIC_API_KEY as configured runtime state for open-source users', function () {
+    process.env.ANTHROPIC_API_KEY = 'env-anthropic-key'
+
+    const settings = new FlowriteSettings({
+      store: new MemoryStore(),
+      safeStorage: createSafeStorage(),
+      getOnlineStatus: () => ({ online: true })
+    })
+
+    const runtimeConfig = settings.getRuntimeConfig()
+    const flowrite = settings.getPublicState()
+
+    expect(runtimeConfig.apiKey).to.equal('env-anthropic-key')
+    expect(flowrite.enabled).to.equal(true)
+    expect(flowrite.configured).to.equal(true)
+    expect(flowrite.reason).to.equal(null)
+  })
+
   it('defaults collaboration mode to comment_only and exposes it in public state', function () {
     const settings = new FlowriteSettings({
       store: new MemoryStore(),
@@ -203,7 +238,7 @@ describe('Flowrite settings', function () {
     expect(result.flowrite.collaborationMode).to.equal(FLOWRITE_COLLABORATION_MODE_COMMENT_ONLY)
   })
 
-  it('treats the environment API key as configured runtime state', function () {
+  it('still supports the legacy AI_GATEWAY_API_KEY environment fallback', function () {
     process.env.AI_GATEWAY_API_KEY = 'env-flowrite-key'
 
     const settings = new FlowriteSettings({

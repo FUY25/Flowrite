@@ -61,7 +61,7 @@ Plans:
 
 Plans:
 - [x] 03-01: Delete the legacy AiReviewButton path and refresh the surviving toolbar contract
-- [ ] 03-02: Prove persona distinction on a real fixture and capture a human-reviewed eval artifact
+- [ ] 03-02: Prove persona distinction on a real fixture and capture a human-reviewed eval artifact (implementation integrated; live eval blocked by missing `AI_GATEWAY_API_KEY`)
 
 ## Progress
 
@@ -72,7 +72,14 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. AI Backend Reliability | 2/2 | Completed | 2026-04-15 |
 | 2. UI Feedback & Safety | 2/2 | Complete    | 2026-04-16 |
-| 3. Cleanup & Verification | 1/2 | In progress | - |
+| 3. Cleanup & Verification | 1/2 | In progress — GPT Pro V1 deliverables integrated, live eval blocked | - |
+
+## Recent Integration Notes
+
+- 2026-04-24: Integrated GPT Pro V1 deliverables from `deliverables from GPT Pro/flowrite-v1-handoff.zip` into the production workspace. The standalone `flowrite-v1.patch` was malformed at line 21, so files were copied from the zip's changed-file tree.
+- 2026-04-24: Imported work adds explicit rewrite suggestion UX, version history UI, and direct Claude settings support beyond the original Have a Look milestone scope.
+- 2026-04-24: Verification: `npm --prefix flowrite-marktext run unit` passed with 666 tests; `npm --prefix flowrite-marktext run e2e` passed with 19 tests using a temporary npm-backed `yarn` wrapper because `yarn` is not installed.
+- 2026-04-24: Remaining blocker: `npm --prefix flowrite-marktext run eval:flowrite` fails until `AI_GATEWAY_API_KEY` is available for CLN-02 live persona verification.
 
 ### Phase 4: Persona Voice Design - Expand the three persona instructions (Friendly, Critical, Improvement) from single sentences to rich behavioral profiles with tone examples, focus areas, and anti-patterns
 

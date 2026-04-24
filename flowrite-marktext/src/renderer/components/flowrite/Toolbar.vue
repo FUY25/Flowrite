@@ -38,6 +38,39 @@
       </button>
 
       <div
+        class="flowrite-toolbar__history"
+        ref="history"
+      >
+        <button
+          type="button"
+          class="flowrite-toolbar__icon-button"
+          :class="{ 'is-active': showHistoryPopover }"
+          aria-label="Open version history"
+          data-testid="flowrite-version-history-button"
+          :disabled="!hasSavedDocument"
+          @click="toggleHistoryPopover"
+        >
+          <span class="flowrite-toolbar__history-icon" aria-hidden="true">
+            <span class="flowrite-toolbar__history-icon-ring"></span>
+            <span class="flowrite-toolbar__history-icon-hand flowrite-toolbar__history-icon-hand--short"></span>
+            <span class="flowrite-toolbar__history-icon-hand flowrite-toolbar__history-icon-hand--long"></span>
+          </span>
+        </button>
+
+        <div
+          v-if="showHistoryPopover"
+          class="flowrite-toolbar__popover flowrite-toolbar__popover--history"
+        >
+          <version-history-popover
+            :current-markdown="currentMarkdown"
+            :current-saved="currentSaved"
+            @close="closeHistoryPopover"
+            @restored="handleVersionRestored"
+          ></version-history-popover>
+        </div>
+      </div>
+
+      <div
         class="flowrite-toolbar__review"
         ref="review"
       >
@@ -45,14 +78,14 @@
           type="button"
           class="flowrite-toolbar__review-button"
           data-testid="flowrite-have-a-look-button"
-          :disabled="!hasSavedDocument || isBusy"
+          :disabled="reviewButtonDisabled"
           @click="togglePopover"
         >
           <span
             class="flowrite-toolbar__review-label"
-            :class="{ 'is-busy': isBusy }"
+            :class="{ 'is-busy': isReviewBusy }"
           >
-            {{ isBusy ? 'Looking…' : 'Have a look!' }}
+            {{ isReviewBusy ? 'Reviewing...' : 'Have a look!' }}
           </span>
         </button>
 
@@ -63,8 +96,13 @@
           <have-a-look-popover
             :persona.sync="persona"
             :prompt.sync="prompt"
+            :busy="isRuntimeBusy"
+            :runtime-message="reviewRuntimeMessage"
+            :available="availability.enabled"
+            :availability-reason="availability.reason"
             @cancel="closePopover"
             @confirm="runReview"
+            @open-settings="openFlowriteSettings"
           ></have-a-look-popover>
         </div>
       </div>
@@ -73,17 +111,21 @@
 </template>
 
 <script>
+import { ipcRenderer } from 'electron'
 import { mapState } from 'vuex'
 import bus from '../../bus'
 import {
   PERSONA_FRIENDLY,
+  PHASE_AI_REVIEW,
   RUNTIME_STATUS_RUNNING
 } from '../../../flowrite/constants'
 import HaveALookPopover from './HaveALookPopover.vue'
+import VersionHistoryPopover from './VersionHistoryPopover.vue'
 
 export default {
   components: {
-    HaveALookPopover
+    HaveALookPopover,
+    VersionHistoryPopover
   },
   props: {
     inline: {
@@ -94,6 +136,7 @@ export default {
   data () {
     return {
       showPopover: false,
+      showHistoryPopover: false,
       persona: PERSONA_FRIENDLY,
       prompt: ''
     }
@@ -115,8 +158,34 @@ export default {
       return Boolean(this.currentFile && this.currentFile.pathname)
     },
 
-    isBusy () {
-      return !this.availability.enabled || this.runtime.status === RUNTIME_STATUS_RUNNING
+    currentMarkdown () {
+      return this.currentFile && typeof this.currentFile.markdown === 'string'
+        ? this.currentFile.markdown
+        : ''
+    },
+
+    currentSaved () {
+      return Boolean(this.currentFile && this.currentFile.isSaved !== false)
+    },
+
+    isRuntimeBusy () {
+      return this.runtime.status === RUNTIME_STATUS_RUNNING
+    },
+
+    reviewButtonDisabled () {
+      return !this.hasSavedDocument || this.isRuntimeBusy
+    },
+
+    isReviewBusy () {
+      return this.runtime.phase === PHASE_AI_REVIEW && this.runtime.status === RUNTIME_STATUS_RUNNING
+    },
+
+    reviewRuntimeMessage () {
+      if (!this.isReviewBusy) {
+        return ''
+      }
+
+      return this.runtime.message || 'Flowrite is reviewing the whole draft...'
     }
   },
   watch: {
@@ -124,6 +193,7 @@ export default {
       this.persona = PERSONA_FRIENDLY
       this.prompt = ''
       this.showPopover = false
+      this.showHistoryPopover = false
     }
   },
   mounted () {
@@ -145,29 +215,43 @@ export default {
     },
 
     togglePopover () {
-      if (this.isBusy) {
+      if (this.reviewButtonDisabled) {
         return
       }
+      this.showHistoryPopover = false
       this.showPopover = !this.showPopover
+    },
+
+    toggleHistoryPopover () {
+      if (!this.hasSavedDocument) {
+        return
+      }
+      this.showPopover = false
+      this.showHistoryPopover = !this.showHistoryPopover
     },
 
     closePopover () {
       this.showPopover = false
     },
 
+    closeHistoryPopover () {
+      this.showHistoryPopover = false
+    },
+
     handleDocumentClick (event) {
-      if (!this.showPopover) {
-        return
+      const reviewRoot = this.$refs.review
+      if (this.showPopover && reviewRoot && !reviewRoot.contains(event.target)) {
+        this.closePopover()
       }
 
-      const root = this.$refs.review
-      if (root && !root.contains(event.target)) {
-        this.closePopover()
+      const historyRoot = this.$refs.history
+      if (this.showHistoryPopover && historyRoot && !historyRoot.contains(event.target)) {
+        this.closeHistoryPopover()
       }
     },
 
     async runReview () {
-      if (this.isBusy) {
+      if (this.isRuntimeBusy || !this.availability.enabled) {
         return
       }
 
@@ -176,6 +260,15 @@ export default {
         prompt: this.prompt.trim()
       })
       this.prompt = ''
+      this.closePopover()
+    },
+
+    handleVersionRestored () {
+      this.closeHistoryPopover()
+    },
+
+    openFlowriteSettings () {
+      ipcRenderer.send('app-create-settings-window', 'general')
       this.closePopover()
     }
   }
@@ -206,6 +299,7 @@ export default {
     gap: 8px;
   }
 
+  .flowrite-toolbar__history,
   .flowrite-toolbar--inline .flowrite-toolbar__right {
     gap: 6px;
   }
@@ -268,6 +362,43 @@ export default {
   .flowrite-toolbar__review-button:disabled {
     cursor: not-allowed;
     opacity: 0.65;
+  }
+
+  .flowrite-toolbar__history-icon {
+    position: relative;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .flowrite-toolbar__history-icon-ring {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid currentColor;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  .flowrite-toolbar__history-icon-hand {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    width: 1.5px;
+    border-radius: 999px;
+    background: currentColor;
+    transform-origin: center bottom;
+  }
+
+  .flowrite-toolbar__history-icon-hand--short {
+    height: 3.5px;
+    transform: translateX(-50%) rotate(90deg);
+  }
+
+  .flowrite-toolbar__history-icon-hand--long {
+    height: 5px;
+    transform: translateX(-50%) rotate(18deg);
   }
 
   .flowrite-toolbar__review-label {
@@ -375,15 +506,15 @@ export default {
     top: 9px;
   }
 
-  .flowrite-toolbar__review {
-    position: relative;
-  }
-
   .flowrite-toolbar__popover {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
     z-index: 18;
+  }
+
+  .flowrite-toolbar__popover--history {
+    right: -8px;
   }
 
   @keyframes flowrite-rainbow-drift-breathe {

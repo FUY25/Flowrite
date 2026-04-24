@@ -2,7 +2,8 @@ import log from 'electron-log'
 import {
   createAnthropicClient,
   DEFAULT_FLOWRITE_AI_BASE_URL,
-  DEFAULT_FLOWRITE_MODEL
+  DEFAULT_FLOWRITE_MODEL,
+  resolveDefaultAnthropicApiKey
 } from '../ai/anthropicClient'
 import {
   getOnlineStatus as resolveOnlineStatus,
@@ -151,7 +152,7 @@ export class FlowriteSettings {
       return overrides.apiKey
     }
 
-    return this.decryptApiKey(settings.encryptedApiKey) || process.env.AI_GATEWAY_API_KEY || ''
+    return this.decryptApiKey(settings.encryptedApiKey) || resolveDefaultAnthropicApiKey()
   }
 
   getRuntimeConfig (overrides = {}) {
@@ -301,7 +302,7 @@ export class FlowriteSettings {
         valid: false,
         error: {
           code: 'FLOWRITE_API_KEY_MISSING',
-          message: 'Flowrite API key is required.'
+          message: 'Claude API key is required.'
         },
         flowrite: this.getPublicState({ settings })
       }

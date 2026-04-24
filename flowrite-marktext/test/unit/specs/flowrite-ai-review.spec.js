@@ -18,7 +18,7 @@ describe('Flowrite AI review', function () {
 
   it('streams progress while one review run creates multiple comments without persisting final free text', async function () {
     const pathname = path.join(tempRoot, 'draft.md')
-    await fs.writeFile(pathname, '# Draft\n\nA paragraph that needs review.\n', 'utf8')
+    await fs.writeFile(pathname, '# Draft\n\nA paragraph that needs review.\n\nA second paragraph needs a closer look.\n', 'utf8')
 
     const sentEvents = []
     const browserWindow = {
@@ -53,6 +53,21 @@ describe('Flowrite AI review', function () {
     let receivedReviewPersona = null
     controller.runtimeManager.runJob = async ({ documentPath, onProgress, payload }) => {
       receivedReviewPersona = payload.reviewPersona
+      const marginQuote = 'A second paragraph needs a closer look.'
+      const marginAnchor = {
+        version: 1,
+        quote: marginQuote,
+        start: {
+          key: 'paragraph-2',
+          offset: 0
+        },
+        end: {
+          key: 'paragraph-2',
+          offset: marginQuote.length
+        },
+        contextBefore: '',
+        contextAfter: ''
+      }
 
       const firstResult = await controller.executeToolCall({
         name: 'create_comment',
@@ -75,8 +90,8 @@ describe('Flowrite AI review', function () {
       const secondResult = await controller.executeToolCall({
         name: 'create_comment',
         input: {
-          threadId: FLOWRITE_GLOBAL_THREAD_ID,
-          scope: 'global',
+          scope: 'margin',
+          anchor: marginAnchor,
           body: 'Second review comment.'
         },
         documentPath
@@ -108,8 +123,13 @@ describe('Flowrite AI review', function () {
 
       const comments = await loadComments(pathname)
       const globalThread = comments.find(thread => thread.id === FLOWRITE_GLOBAL_THREAD_ID)
+      const marginThread = comments.find(thread => thread && thread.scope === 'margin')
       expect(globalThread.comments.map(comment => comment.body)).to.deep.equal([
-        'First review comment.',
+        'First review comment.'
+      ])
+      expect(marginThread).to.not.equal(undefined)
+      expect(marginThread.anchor.quote).to.equal('A second paragraph needs a closer look.')
+      expect(marginThread.comments.map(comment => comment.body)).to.deep.equal([
         'Second review comment.'
       ])
 
@@ -119,6 +139,13 @@ describe('Flowrite AI review', function () {
       expect(progressMessages.some(payload => payload.phase === 'ai_review' && payload.status === 'running')).to.equal(true)
       expect(progressMessages.some(payload => payload.message === 'Flowrite added 1 review comment...')).to.equal(true)
       expect(progressMessages.some(payload => payload.message === 'Flowrite added 2 review comments...')).to.equal(true)
+      expect(progressMessages.some(payload => {
+        return payload.phase === 'ai_review' &&
+          payload.status === 'running' &&
+          Array.isArray(payload.inFlightAnchors) &&
+          payload.inFlightAnchors.length === 1 &&
+          payload.inFlightAnchors[0].quote === 'A second paragraph needs a closer look.'
+      })).to.equal(true)
       expect(progressMessages.some(payload => payload.phase === 'ai_review' && payload.status === 'completed')).to.equal(true)
       expect(globalThread.comments.some(comment => comment.body === 'Review complete.')).to.equal(false)
       expect(receivedReviewPersona).to.equal('improvement')

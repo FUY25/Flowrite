@@ -18,6 +18,7 @@
       :submitting="submitting"
       :error="error"
       @submit-composer="submitComposer"
+      @submit-suggestion="submitSuggestion"
       @close-composer="closeComposer"
       @size-change="$emit('size-change')"
     ></margin-thread-card>
@@ -140,10 +141,10 @@ export default {
       ))
     },
 
-    async submitComposer ({ body, anchor, resolve, reject } = {}) {
+    async runComposerAction ({ body, anchor, resolve, reject, action, fallbackError }) {
       if (!body || !anchor || this.submitting) {
         if (typeof reject === 'function') {
-          reject(new Error('Unable to post this margin comment.'))
+          reject(new Error(fallbackError))
         }
         return
       }
@@ -154,7 +155,7 @@ export default {
       let unwatch = null
 
       try {
-        const submitPromise = this.$store.dispatch('SUBMIT_MARGIN_COMMENT', {
+        const submitPromise = action({
           body: pendingBody,
           anchor
         })
@@ -186,7 +187,7 @@ export default {
           return
         }
 
-        this.error = error && error.message ? error.message : 'Unable to post this margin comment.'
+        this.error = error && error.message ? error.message : fallbackError
         if (typeof reject === 'function') {
           reject(error)
         }
@@ -200,6 +201,28 @@ export default {
           this.submitting = false
         }
       }
+    },
+
+    async submitComposer ({ body, anchor, resolve, reject } = {}) {
+      return this.runComposerAction({
+        body,
+        anchor,
+        resolve,
+        reject,
+        action: payload => this.$store.dispatch('SUBMIT_MARGIN_COMMENT', payload),
+        fallbackError: 'Unable to post this margin comment.'
+      })
+    },
+
+    async submitSuggestion ({ body, anchor, resolve, reject } = {}) {
+      return this.runComposerAction({
+        body,
+        anchor,
+        resolve,
+        reject,
+        action: payload => this.$store.dispatch('REQUEST_SUGGESTION', payload),
+        fallbackError: 'Unable to request a rewrite suggestion.'
+      })
     }
   }
 }

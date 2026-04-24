@@ -52,7 +52,9 @@ export default {
       threadPositionCache: {},
       rafId: null,
       resizeObserver: null,
-      resizeListener: null
+      resizeListener: null,
+      scrollContainer: null,
+      scrollListener: null
     }
   },
   computed: {
@@ -280,6 +282,12 @@ export default {
 
       const container = this.getEditorContainer()
       if (container) {
+        this.scrollContainer = container
+        this.scrollListener = () => {
+          this.scheduleRefresh()
+        }
+        container.addEventListener('scroll', this.scrollListener)
+
         if (typeof ResizeObserver !== 'undefined') {
           this.resizeObserver = new ResizeObserver(() => {
             this.scheduleRefresh()
@@ -299,6 +307,12 @@ export default {
         this.resizeObserver.disconnect()
         this.resizeObserver = null
       }
+
+      if (this.scrollContainer && this.scrollListener) {
+        this.scrollContainer.removeEventListener('scroll', this.scrollListener)
+      }
+      this.scrollContainer = null
+      this.scrollListener = null
     },
 
     isActive (threadId) {

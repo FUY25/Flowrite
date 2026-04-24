@@ -2,6 +2,7 @@ import Vue from 'vue'
 import Vuex from 'vuex'
 import { expect } from 'chai'
 import { ipcRenderer } from 'electron'
+import bus from '../../../src/renderer/bus'
 import notice from '../../../src/renderer/services/notification'
 import flowriteModule, {
   createDefaultFlowriteState,
@@ -43,6 +44,12 @@ const createStore = ({ preferences, currentFile } = {}) => {
         mutations: {
           SET_EDITOR_CURRENT_FILE (state, nextFile) {
             state.currentFile = nextFile
+          },
+          SET_MARKDOWN (state, markdown) {
+            state.currentFile.markdown = markdown
+          },
+          SET_SAVE_STATUS (state, status) {
+            state.currentFile.isSaved = status
           }
         }
       },
@@ -74,6 +81,7 @@ describe('Flowrite renderer store', function () {
   const originalOn = ipcRenderer.on
   const originalSend = ipcRenderer.send
   const originalNotify = notice.notify
+  const originalBusEmit = bus.$emit
   let listeners
 
   beforeEach(function () {
@@ -87,6 +95,7 @@ describe('Flowrite renderer store', function () {
     notice.notify = () => {
       throw new Error('Unexpected notice.notify call in test.')
     }
+    bus.$emit = () => {}
   })
 
   afterEach(function () {
@@ -94,6 +103,7 @@ describe('Flowrite renderer store', function () {
     ipcRenderer.on = originalOn
     ipcRenderer.send = originalSend
     notice.notify = originalNotify
+    bus.$emit = originalBusEmit
   })
 
   it('bootstraps the current document sidecars and availability into one module', async function () {
@@ -526,30 +536,36 @@ describe('Flowrite renderer store', function () {
 
   it('tracks runtime progress and exposes in-flight anchors for text locking', async function () {
     const store = createStore()
+    const inFlightAnchor = {
+      version: 1,
+      quote: 'Locked passage',
+      start: {
+        key: 'p1',
+        offset: 2
+      },
+      end: {
+        key: 'p1',
+        offset: 8
+      },
+      contextBefore: 'A ',
+      contextAfter: ' remains'
+    }
 
     await store.dispatch('UPDATE_FLOWRITE_RUNTIME_PROGRESS', {
       requestId: 'req-1',
       status: 'running',
-      phase: 'tool_call',
+      phase: 'ai_review',
       ready: true,
-      inFlightAnchors: [{
-        anchorId: 'anchor-1',
-        startKey: 'p1',
-        endKey: 'p1'
-      }]
+      inFlightAnchors: [inFlightAnchor]
     })
 
     expect(store.state.flowrite.runtime).to.include({
       requestId: 'req-1',
       status: 'running',
-      phase: 'tool_call',
+      phase: 'ai_review',
       ready: true
     })
-    expect(store.state.flowrite.inFlightAnchors).to.deep.equal([{
-      anchorId: 'anchor-1',
-      startKey: 'p1',
-      endKey: 'p1'
-    }])
+    expect(store.state.flowrite.inFlightAnchors).to.deep.equal([inFlightAnchor])
 
     await store.dispatch('UPDATE_FLOWRITE_RUNTIME_PROGRESS', {
       requestId: 'req-1',
@@ -866,6 +882,80 @@ describe('Flowrite renderer store', function () {
     })
     expect(store.state.flowrite.comments).to.deep.equal([{ id: 'comment-active', body: 'Active comment' }])
     expect(store.state.flowrite.suggestions).to.deep.equal([{ id: 'suggestion-active', status: 'open' }])
+  })
+
+  it('lists version-history snapshots for the active document', async function () {
+    const store = createStore({
+      currentFile: {
+        pathname: '/notes/draft.md',
+        markdown: '# Draft\n',
+        isSaved: true
+      }
+    })
+
+    const invokeCalls = []
+    ipcRenderer.invoke = async (channel, payload) => {
+      invokeCalls.push({ channel, payload })
+      return [{
+        id: '2026-04-20T10-00-00-000Z-manual-save',
+        kind: 'document_save',
+        saveReason: 'manual_save',
+        markdown: '# Draft\n',
+        createdAt: '2026-04-20T10:00:00.000Z'
+      }]
+    }
+
+    const result = await store.dispatch('LIST_FLOWRITE_VERSION_HISTORY')
+
+    expect(invokeCalls).to.deep.equal([{
+      channel: 'mt::flowrite:list-version-history',
+      payload: {
+        pathname: '/notes/draft.md'
+      }
+    }])
+    expect(result).to.have.length(1)
+    expect(result[0].saveReason).to.equal('manual_save')
+  })
+
+  it('restores a chosen version into the editor buffer without silently saving it', async function () {
+    const emitted = []
+    bus.$emit = (event, payload) => {
+      emitted.push({ event, payload })
+    }
+
+    const store = createStore({
+      currentFile: {
+        id: 'tab-1',
+        pathname: '/notes/draft.md',
+        markdown: '# Current\n',
+        cursor: {
+          start: { key: 'p-1', offset: 0 },
+          end: { key: 'p-1', offset: 0 }
+        },
+        isSaved: true
+      }
+    })
+
+    const restoredMarkdown = await store.dispatch('RESTORE_FLOWRITE_VERSION_SNAPSHOT', {
+      id: 'snapshot-1',
+      markdown: '# Restored\n'
+    })
+
+    expect(restoredMarkdown).to.equal('# Restored\n')
+    expect(store.state.editor.currentFile.markdown).to.equal('# Restored\n')
+    expect(store.state.editor.currentFile.isSaved).to.equal(false)
+    expect(emitted).to.deep.equal([{
+      event: 'file-changed',
+      payload: {
+        id: 'tab-1',
+        markdown: '# Restored\n',
+        cursor: {
+          start: { key: 'p-1', offset: 0 },
+          end: { key: 'p-1', offset: 0 }
+        },
+        renderCursor: false
+      }
+    }])
   })
 
   it('deletes a margin thread through IPC and refreshes comments and suggestions in the renderer store', async function () {

@@ -89,18 +89,62 @@
       </div>
 
       <div
+        v-if="visibleSuggestions.length"
+        class="flowrite-margin-thread-card__suggestions"
+        @click.stop
+      >
+        <suggestion-card
+          v-for="suggestion in visibleSuggestions"
+          :key="suggestion.id"
+          :suggestion="suggestion"
+          :pending-action="suggestionPendingId === suggestion.id"
+          @accept="acceptSuggestion"
+          @reject="rejectSuggestion"
+        ></suggestion-card>
+        <p
+          v-if="suggestionError"
+          class="flowrite-margin-thread-card__error flowrite-margin-thread-card__error--suggestion"
+        >
+          {{ suggestionError }}
+        </p>
+      </div>
+
+      <div
         v-if="shouldShowReplyInput"
         class="flowrite-margin-thread-card__reply"
         :class="{ 'is-composer': composer }"
         @click.stop
       >
+        <div class="flowrite-margin-thread-card__mode-switch" data-testid="flowrite-margin-thread-mode-switch">
+          <button
+            type="button"
+            class="flowrite-margin-thread-card__mode-button"
+            :class="{ 'is-active': inputMode === 'comment' }"
+            data-testid="flowrite-margin-thread-mode-comment"
+            :disabled="isInputPending"
+            @click.stop="setInputMode('comment')"
+          >
+            Comment
+          </button>
+          <button
+            type="button"
+            class="flowrite-margin-thread-card__mode-button"
+            :class="{ 'is-active': inputMode === 'rewrite' }"
+            data-testid="flowrite-margin-thread-mode-rewrite"
+            :disabled="isInputPending"
+            @click.stop="setInputMode('rewrite')"
+          >
+            Rewrite
+          </button>
+        </div>
+
         <div class="flowrite-margin-thread-card__reply-row">
           <textarea
             ref="replyInput"
             v-model="replyDraft"
             class="flowrite-margin-thread-card__reply-input"
             :data-testid="composer ? 'flowrite-margin-thread-input' : 'flowrite-margin-thread-reply-input'"
-            :placeholder="composer ? 'Ask Flowrite about this passage' : 'Reply...'"
+            :placeholder="replyPlaceholder"
             rows="1"
             :disabled="isInputPending"
             @input="syncReplyInputHeight"
@@ -114,12 +158,15 @@
             class="flowrite-margin-thread-card__submit"
             :data-testid="composer ? 'flowrite-margin-thread-submit' : 'flowrite-margin-thread-reply-submit'"
             :disabled="!trimmedReplyDraft || isInputPending"
-            :aria-label="composer ? 'Post comment' : 'Send reply'"
+            :aria-label="submitButtonLabel"
             @click.stop="submitInput"
           >
             <span class="flowrite-margin-thread-card__submit-icon">↑</span>
           </button>
         </div>
+        <p class="flowrite-margin-thread-card__hint">
+          {{ replyHint }}
+        </p>
         <p
           v-if="composer && error"
           class="flowrite-margin-thread-card__error"
@@ -133,8 +180,15 @@
 
 <script>
 import { ANCHOR_DETACHED } from '../../../flowrite/constants'
+import SuggestionCard from './SuggestionCard.vue'
+
+const INPUT_MODE_COMMENT = 'comment'
+const INPUT_MODE_REWRITE = 'rewrite'
 
 export default {
+  components: {
+    SuggestionCard
+  },
   props: {
     thread: {
       type: Object,
@@ -159,6 +213,18 @@ export default {
     error: {
       type: String,
       default: ''
+    },
+    suggestions: {
+      type: Array,
+      default: () => []
+    },
+    suggestionPendingId: {
+      type: String,
+      default: ''
+    },
+    suggestionError: {
+      type: String,
+      default: ''
     }
   },
   data () {
@@ -170,7 +236,8 @@ export default {
       replyHeightRafId: null,
       lastReplyInputHeight: 24,
       lastThreadId: null,
-      lastCollapsedState: false
+      lastCollapsedState: false,
+      inputMode: INPUT_MODE_COMMENT
     }
   },
   computed: {
@@ -192,6 +259,10 @@ export default {
       }
 
       return Array.isArray(this.thread && this.thread.comments) ? this.thread.comments : []
+    },
+
+    visibleSuggestions () {
+      return Array.isArray(this.suggestions) ? this.suggestions : []
     },
 
     isCompressed () {
@@ -243,6 +314,36 @@ export default {
 
     isInputPending () {
       return this.composer ? this.submitting : this.isReplyPending
+    },
+
+    isRewriteMode () {
+      return this.inputMode === INPUT_MODE_REWRITE
+    },
+
+    replyPlaceholder () {
+      if (this.isRewriteMode) {
+        return 'Describe the rewrite you want...'
+      }
+
+      return this.composer
+        ? 'Ask Flowrite about this passage'
+        : 'Reply...'
+    },
+
+    replyHint () {
+      if (this.isRewriteMode) {
+        return 'Flowrite will suggest a rewrite. You still choose whether to accept it.'
+      }
+
+      return 'Press Enter to send. Cmd/Ctrl+Enter also works.'
+    },
+
+    submitButtonLabel () {
+      if (this.isRewriteMode) {
+        return 'Ask for rewrite'
+      }
+
+      return this.composer ? 'Post comment' : 'Send reply'
     }
   },
   watch: {
@@ -258,6 +359,7 @@ export default {
           this.isExpanded = !nextCollapsedState
           this.showReplyInput = Boolean(this.composer)
           this.replyDraft = ''
+          this.inputMode = INPUT_MODE_COMMENT
           this.$nextTick(() => {
             if (this.shouldShowReplyInput) {
               this.syncReplyInputHeight()
@@ -286,6 +388,21 @@ export default {
           })
         }
       }
+    },
+
+    shouldShowReplyInput (value) {
+      if (!value) {
+        this.replyDraft = ''
+        this.inputMode = INPUT_MODE_COMMENT
+        this.$nextTick(() => {
+          this.syncReplyInputHeight()
+        })
+        return
+      }
+
+      this.$nextTick(() => {
+        this.syncReplyInputHeight()
+      })
     }
   },
   beforeDestroy () {
@@ -326,6 +443,36 @@ export default {
       })
     },
 
+    setInputMode (mode) {
+      if (this.isInputPending) {
+        return
+      }
+
+      const nextMode = mode === INPUT_MODE_REWRITE
+        ? INPUT_MODE_REWRITE
+        : INPUT_MODE_COMMENT
+
+      if (this.inputMode === nextMode) {
+        return
+      }
+
+      this.inputMode = nextMode
+      this.$nextTick(() => {
+        this.syncReplyInputHeight()
+        if (this.$refs.replyInput) {
+          this.$refs.replyInput.focus()
+        }
+      })
+    },
+
+    resetComposerInput () {
+      this.replyDraft = ''
+      this.inputMode = INPUT_MODE_COMMENT
+      this.$nextTick(() => {
+        this.syncReplyInputHeight()
+      })
+    },
+
     async submitInput () {
       if (this.isInputPending) {
         return
@@ -339,13 +486,14 @@ export default {
       if (this.composer) {
         try {
           await new Promise((resolve, reject) => {
-            this.$emit('submit-composer', {
+            this.$emit(this.isRewriteMode ? 'submit-suggestion' : 'submit-composer', {
               body,
               anchor: this.thread && this.thread.anchor ? this.thread.anchor : null,
               resolve,
               reject
             })
           })
+          this.resetComposerInput()
         } catch (error) {
           // Keep the draft in place so the writer can retry after a failed submit.
         }
@@ -359,22 +507,28 @@ export default {
       this.isReplyPending = true
       try {
         await new Promise((resolve, reject) => {
-          this.$emit('reply', {
+          this.$emit(this.isRewriteMode ? 'request-suggestion' : 'reply', {
             threadId: this.thread.id,
             body,
+            anchor: this.thread && this.thread.anchor ? this.thread.anchor : null,
             resolve,
             reject
           })
         })
-        this.replyDraft = ''
-        this.$nextTick(() => {
-          this.syncReplyInputHeight()
-        })
+        this.resetComposerInput()
       } catch (error) {
         // Keep the reply draft in place so the writer can retry after a failed submit.
       } finally {
         this.isReplyPending = false
       }
+    },
+
+    acceptSuggestion (suggestionId) {
+      this.$emit('accept-suggestion', suggestionId)
+    },
+
+    rejectSuggestion (suggestionId) {
+      this.$emit('reject-suggestion', suggestionId)
     },
 
     closeComposer () {
@@ -387,6 +541,7 @@ export default {
       }
 
       this.replyDraft = ''
+      this.inputMode = INPUT_MODE_COMMENT
       this.$nextTick(() => {
         this.syncReplyInputHeight()
       })
@@ -619,6 +774,11 @@ export default {
     margin-top: 14px;
   }
 
+  .flowrite-margin-thread-card__suggestions {
+    margin-top: 12px;
+    padding-left: 40px;
+  }
+
   .flowrite-margin-thread-card__reply {
     margin-top: 10px;
     padding-left: 40px;
@@ -627,6 +787,40 @@ export default {
   .flowrite-margin-thread-card__reply.is-composer {
     margin-top: 8px;
     padding-left: 0;
+  }
+
+  .flowrite-margin-thread-card__mode-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(243, 245, 248, 0.96);
+  }
+
+  .flowrite-margin-thread-card__mode-button {
+    appearance: none;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(93, 102, 118, 0.92);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 7px 11px;
+  }
+
+  .flowrite-margin-thread-card__mode-button.is-active {
+    background: rgba(255, 255, 255, 0.98);
+    color: rgba(52, 58, 69, 0.96);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.10);
+  }
+
+  .flowrite-margin-thread-card__mode-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
   }
 
   .flowrite-margin-thread-card__reply-row {
@@ -694,10 +888,21 @@ export default {
     transform: translateY(-1px);
   }
 
+  .flowrite-margin-thread-card__hint {
+    margin: 8px 0 0;
+    color: rgba(108, 118, 132, 0.86);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
   .flowrite-margin-thread-card__error {
     margin: 8px 0 0;
     color: #9b4d3a;
     font-size: 12px;
     line-height: 1.4;
+  }
+
+  .flowrite-margin-thread-card__error--suggestion {
+    margin-left: 2px;
   }
 </style>

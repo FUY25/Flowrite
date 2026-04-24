@@ -29,7 +29,9 @@ import {
 } from '../../../src/main/flowrite/files/suggestionsStore'
 import {
   ensureSnapshotForAcceptedSuggestion,
-  listSnapshots
+  listSnapshots,
+  recordDocumentSnapshot,
+  SNAPSHOT_KIND_DOCUMENT_SAVE
 } from '../../../src/main/flowrite/files/snapshotStore'
 import {
   SCOPE_MARGIN,
@@ -595,6 +597,75 @@ describe('Flowrite sidecar storage', function () {
     expect(third.created).to.equal(true)
     expect(snapshots).to.have.length(2)
     expect(documentRecord.lastSnapshotSaveCycleId).to.equal('cycle-2')
+  })
+
+  it('records manual and autosave snapshots while deduplicating consecutive identical saves', async function () {
+    const pathname = path.join(tempRoot, 'history.md')
+
+    const first = await recordDocumentSnapshot(pathname, '# Draft\n', {
+      createdAt: '2026-04-20T10:00:00.000Z',
+      saveReason: 'manual_save'
+    })
+    const duplicate = await recordDocumentSnapshot(pathname, '# Draft\n', {
+      createdAt: '2026-04-20T10:01:00.000Z',
+      saveReason: 'autosave'
+    })
+    const second = await recordDocumentSnapshot(pathname, '# Draft revised\n', {
+      createdAt: '2026-04-20T10:02:00.000Z',
+      saveReason: 'autosave'
+    })
+
+    const snapshots = await listSnapshots(pathname)
+    const documentRecord = await loadDocumentRecord(pathname)
+
+    expect(first.created).to.equal(true)
+    expect(duplicate.created).to.equal(false)
+    expect(second.created).to.equal(true)
+    expect(snapshots).to.have.length(2)
+    expect(snapshots[0].kind).to.equal(SNAPSHOT_KIND_DOCUMENT_SAVE)
+    expect(snapshots[0].saveReason).to.equal('autosave')
+    expect(snapshots[1].saveReason).to.equal('manual_save')
+    expect(documentRecord.lastVersionSnapshotHash).to.equal(snapshots[0].hash)
+  })
+
+  it('persists document-save snapshots through the markdown save pipeline', async function () {
+    const pathname = path.join(tempRoot, 'pipeline.md')
+
+    await writeMarkdownFile(pathname, '# First\n', markdownOptions, {
+      flowrite: {
+        snapshot: {
+          kind: SNAPSHOT_KIND_DOCUMENT_SAVE,
+          saveReason: 'manual_save',
+          markdown: '# First\n'
+        }
+      }
+    })
+
+    await writeMarkdownFile(pathname, '# First\n', markdownOptions, {
+      flowrite: {
+        snapshot: {
+          kind: SNAPSHOT_KIND_DOCUMENT_SAVE,
+          saveReason: 'autosave',
+          markdown: '# First\n'
+        }
+      }
+    })
+
+    await writeMarkdownFile(pathname, '# Second\n', markdownOptions, {
+      flowrite: {
+        snapshot: {
+          kind: SNAPSHOT_KIND_DOCUMENT_SAVE,
+          saveReason: 'autosave',
+          markdown: '# Second\n'
+        }
+      }
+    })
+
+    const snapshots = await listSnapshots(pathname)
+
+    expect(snapshots).to.have.length(2)
+    expect(snapshots[0].markdown).to.equal('# Second\n')
+    expect(snapshots[1].markdown).to.equal('# First\n')
   })
 
   it('migrates the sidecar namespace when a document is renamed or moved in-app', async function () {

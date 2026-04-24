@@ -16,6 +16,14 @@ import {
 
 const autoSaveTimers = new Map()
 
+const createFlowriteSaveContext = (markdown, saveReason = 'manual_save') => ({
+  snapshot: {
+    kind: 'document_save',
+    saveReason,
+    markdown: typeof markdown === 'string' ? markdown : ''
+  }
+})
+
 const state = {
   currentFile: {},
   tabs: [],
@@ -408,7 +416,14 @@ const actions = {
     const options = getOptionsFromState(file)
 
     // Save the file content via main process and send a close tab response.
-    ipcRenderer.send('mt::save-and-close-tabs', [{ id, pathname, filename, markdown, options }])
+    ipcRenderer.send('mt::save-and-close-tabs', [{
+      id,
+      pathname,
+      filename,
+      markdown,
+      options,
+      flowrite: createFlowriteSaveContext(markdown, 'window_close')
+    }])
   },
 
   // need pass some data to main process when `save` menu item clicked
@@ -424,7 +439,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          flowrite: createFlowriteSaveContext(markdown, 'manual_save')
         })
       }
     })
@@ -443,7 +459,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          flowrite: createFlowriteSaveContext(markdown, 'save_as')
         })
       }
     })
@@ -506,7 +523,14 @@ const actions = {
         .map(file => {
           const { id, filename, pathname, markdown } = file
           const options = getOptionsFromState(file)
-          return { id, filename, pathname, markdown, options }
+          return {
+            id,
+            filename,
+            pathname,
+            markdown,
+            options,
+            flowrite: createFlowriteSaveContext(markdown, 'window_close')
+          }
         })
 
       if (unsavedFiles.length) {
@@ -532,7 +556,14 @@ const actions = {
       .map(file => {
         const { id, filename, pathname, markdown } = file
         const options = getOptionsFromState(file)
-        return { id, filename, pathname, markdown, options }
+        return {
+          id,
+          filename,
+          pathname,
+          markdown,
+          options,
+          flowrite: createFlowriteSaveContext(markdown, closeTabs ? 'window_close' : 'save_all')
+        }
       })
 
     if (closeTabs) {
@@ -561,7 +592,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          flowrite: createFlowriteSaveContext(markdown, 'move_to')
         })
       } else {
         // if not, move to a new(maybe) folder
@@ -589,7 +621,8 @@ const actions = {
         pathname,
         markdown,
         options,
-        defaultPath
+        defaultPath,
+        flowrite: createFlowriteSaveContext(markdown, 'rename')
       })
     } else {
       bus.$emit('rename')
@@ -988,7 +1021,8 @@ const actions = {
           pathname,
           markdown,
           options,
-          defaultPath
+          defaultPath,
+          flowrite: createFlowriteSaveContext(markdown, 'autosave')
         })
       }
     }, autoSaveDelay)

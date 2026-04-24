@@ -1,9 +1,12 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
+import { ipcRenderer } from 'electron'
 import { expect } from 'chai'
 import Toolbar from '../../../src/renderer/components/flowrite/Toolbar.vue'
 
 Vue.use(Vuex)
+
+const originalIpcSend = ipcRenderer.send
 
 const createStore = ({ runtime = {}, availability = {}, currentFile = {} } = {}) => {
   return new Vuex.Store({
@@ -56,6 +59,12 @@ const createStore = ({ runtime = {}, availability = {}, currentFile = {} } = {})
           },
           RUN_AI_REVIEW () {
             return Promise.resolve()
+          },
+          LIST_FLOWRITE_VERSION_HISTORY () {
+            return Promise.resolve([])
+          },
+          RESTORE_FLOWRITE_VERSION_SNAPSHOT () {
+            return Promise.resolve()
           }
         }
       }
@@ -73,6 +82,14 @@ const mountToolbar = store => {
 }
 
 describe('Flowrite Have a Look toolbar', function () {
+  beforeEach(function () {
+    ipcRenderer.send = () => {}
+  })
+
+  afterEach(function () {
+    ipcRenderer.send = originalIpcSend
+  })
+
   it('keeps the mounted Have a Look entry point visibly busy during AI review', async function () {
     const store = createStore()
     const vm = mountToolbar(store)
@@ -105,6 +122,56 @@ describe('Flowrite Have a Look toolbar', function () {
       expect(cancel.disabled).to.equal(true)
       expect(go.disabled).to.equal(true)
       expect(status.textContent).to.include('Flowrite is reviewing the whole draft...')
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
+
+  it('shows a version-history entry point for saved drafts', async function () {
+    const store = createStore()
+    const vm = mountToolbar(store)
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+      const historyButton = vm.$el.querySelector('[data-testid="flowrite-version-history-button"]')
+      expect(historyButton).to.not.equal(null)
+      expect(historyButton.disabled).to.equal(false)
+    } finally {
+      if (vm.$el && vm.$el.parentNode === document.body) {
+        document.body.removeChild(vm.$el)
+      }
+      vm.$destroy()
+    }
+  })
+
+  it('opens setup guidance instead of dead-ending when Have a Look is unavailable', async function () {
+    const store = createStore({
+      availability: {
+        enabled: false,
+        reason: 'unconfigured'
+      }
+    })
+    const vm = mountToolbar(store)
+    document.body.appendChild(vm.$el)
+
+    try {
+      await Vue.nextTick()
+      const reviewButton = vm.$el.querySelector('[data-testid="flowrite-have-a-look-button"]')
+      expect(reviewButton.disabled).to.equal(false)
+
+      reviewButton.click()
+      await Vue.nextTick()
+
+      const unavailable = vm.$el.querySelector('[data-testid="flowrite-have-a-look-unavailable"]')
+      const openSettings = vm.$el.querySelector('[data-testid="flowrite-have-a-look-open-settings"]')
+
+      expect(unavailable).to.not.equal(null)
+      expect(unavailable.textContent).to.include('Claude')
+      expect(openSettings).to.not.equal(null)
     } finally {
       if (vm.$el && vm.$el.parentNode === document.body) {
         document.body.removeChild(vm.$el)

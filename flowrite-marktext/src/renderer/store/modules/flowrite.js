@@ -564,6 +564,63 @@ const actions = {
     return suggestions
   },
 
+  async LIST_FLOWRITE_VERSION_HISTORY ({ rootState }) {
+    const currentFile = rootState.editor && rootState.editor.currentFile
+      ? rootState.editor.currentFile
+      : {}
+    const pathname = currentFile.pathname || ''
+
+    if (!pathname) {
+      return []
+    }
+
+    return ipcRenderer.invoke('mt::flowrite:list-version-history', {
+      pathname
+    })
+  },
+
+  async LOAD_FLOWRITE_VERSION_SNAPSHOT ({ rootState }, snapshotId) {
+    const currentFile = rootState.editor && rootState.editor.currentFile
+      ? rootState.editor.currentFile
+      : {}
+    const pathname = currentFile.pathname || ''
+
+    if (!pathname || !snapshotId) {
+      return null
+    }
+
+    return ipcRenderer.invoke('mt::flowrite:load-version-snapshot', {
+      pathname,
+      snapshotId
+    })
+  },
+
+  async RESTORE_FLOWRITE_VERSION_SNAPSHOT ({ commit, rootState }, snapshot = {}) {
+    const currentFile = rootState.editor && rootState.editor.currentFile
+      ? rootState.editor.currentFile
+      : {}
+    const nextMarkdown = typeof snapshot.markdown === 'string' ? snapshot.markdown : ''
+
+    if (!currentFile.id) {
+      throw new Error('Open a document before restoring a version.')
+    }
+
+    if (!currentFile.isSaved) {
+      throw new Error('Save or discard your current edits before restoring a version.')
+    }
+
+    commit('SET_MARKDOWN', nextMarkdown, { root: true })
+    commit('SET_SAVE_STATUS', false, { root: true })
+    bus.$emit('file-changed', {
+      id: currentFile.id,
+      markdown: nextMarkdown,
+      cursor: currentFile.cursor,
+      renderCursor: false
+    })
+
+    return nextMarkdown
+  },
+
   TOGGLE_FLOWRITE_ANNOTATIONS_PANE ({ commit, state }) {
     const nextIsOpen = !state.showAnnotationsPane
     if (!nextIsOpen) {

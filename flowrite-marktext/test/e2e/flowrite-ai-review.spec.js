@@ -16,9 +16,12 @@ test.describe('Flowrite AI Review', () => {
     const userDataDir = path.join(tempRoot, 'user-data')
     const articlePath = path.join(tempRoot, 'draft.md')
     const clientModulePath = path.join(tempRoot, 'flowrite-test-client.js')
+    const anchorFilePath = path.join(tempRoot, 'review-anchor.json')
 
-    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with too many unresolved turns.\n', 'utf8')
+    await fs.writeFile(articlePath, '# Draft\n\nA reflective paragraph with too many unresolved turns.\n\nA second paragraph lands without enough concrete pressure.\n', 'utf8')
     await fs.writeFile(clientModulePath, `
+      const fs = require('fs')
+
       module.exports.createAnthropicClient = function createAnthropicClient () {
         let callCount = 0
         return {
@@ -27,6 +30,7 @@ test.describe('Flowrite AI Review', () => {
               create: async function create () {
                 callCount += 1
                 if (callCount === 1) {
+                  const marginAnchor = JSON.parse(fs.readFileSync(${JSON.stringify(anchorFilePath)}, 'utf8'))
                   return {
                     id: 'msg_review_tool_1',
                     role: 'assistant',
@@ -47,14 +51,16 @@ test.describe('Flowrite AI Review', () => {
                         id: 'toolu_review_2',
                         name: 'create_comment',
                         input: {
-                          threadId: 'global-thread',
-                          scope: 'global',
-                          body: 'Review comment two: the paragraph hints at conflict but never names the pressure clearly.'
+                          scope: 'margin',
+                          anchor: marginAnchor,
+                          body: 'Margin review: the second paragraph names uncertainty, but the concrete pressure still feels blurred.'
                         }
                       }
                     ]
                   }
                 }
+
+                await new Promise(resolve => setTimeout(resolve, 800))
 
                 return {
                   id: 'msg_review_done',
@@ -90,6 +96,31 @@ test.describe('Flowrite AI Review', () => {
       page = launched.page
 
       await waitForRendererIdle(page)
+      const reviewParagraph = await page.evaluate(() => {
+        const paragraphs = Array.from(document.querySelectorAll('#ag-editor-id .ag-paragraph[id]'))
+        const paragraph = paragraphs.find(node => (node.textContent || '').includes('A second paragraph lands without enough concrete pressure.'))
+        if (!paragraph) {
+          return null
+        }
+
+        const text = paragraph.textContent || ''
+        return {
+          version: 1,
+          start: {
+            key: paragraph.id,
+            offset: 0
+          },
+          end: {
+            key: paragraph.id,
+            offset: text.length
+          },
+          quote: text,
+          contextBefore: '',
+          contextAfter: ''
+        }
+      })
+      expect(reviewParagraph).not.toBeNull()
+      await fs.writeFile(anchorFilePath, JSON.stringify(reviewParagraph), 'utf8')
 
       await expect(page.locator('[data-testid="flowrite-toolbar"]')).toBeVisible()
       await page.locator('[data-testid="flowrite-have-a-look-button"]').click()
@@ -97,10 +128,19 @@ test.describe('Flowrite AI Review', () => {
       await page.locator('[data-testid="flowrite-have-a-look-popover"]').getByRole('button', { name: 'Critical' }).click()
       await page.locator('[data-testid="flowrite-have-a-look-go"]').click()
 
-      await expect(page.locator('[data-testid="flowrite-comment-body"]')).toContainText([
-        'Review comment one: the opening gesture feels more atmospheric than specific.',
-        'Review comment two: the paragraph hints at conflict but never names the pressure clearly.'
-      ])
+      await expect(page.locator('[data-testid="flowrite-have-a-look-button"]')).toContainText('Reviewing...')
+      await expect(page.locator('[data-testid="flowrite-have-a-look-prompt"]')).toBeDisabled()
+      await expect(page.locator('[data-testid="flowrite-have-a-look-go"]')).toBeDisabled()
+      await expect(page.locator('[data-testid="flowrite-have-a-look-status"]')).toContainText('Flowrite is reviewing the whole draft...')
+      await expect(page.locator('.flowrite-global-comments__status')).toContainText('Flowrite is reviewing the whole draft...')
+
+      await expect(page.locator('[data-testid="flowrite-comment-body"]')).toContainText(
+        'Review comment one: the opening gesture feels more atmospheric than specific.'
+      )
+      await expect(page.locator('[data-testid="flowrite-margin-thread"]')).toContainText(
+        'Margin review: the second paragraph names uncertainty, but the concrete pressure still feels blurred.'
+      )
+      await expect(page.locator('[data-testid="flowrite-margin-dot"]')).toBeVisible()
     } finally {
       try {
         await closeElectron(app)

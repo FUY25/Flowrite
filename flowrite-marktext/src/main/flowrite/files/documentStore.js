@@ -9,6 +9,8 @@ const DOCUMENT_VERSION = 1
 export const DEFAULT_DOCUMENT_RECORD = {
   version: DOCUMENT_VERSION,
   lastSnapshotSaveCycleId: null,
+  lastVersionSnapshotHash: null,
+  lastVersionSnapshotAt: null,
   conversationHistory: [],
   historyTokenEstimate: 0,
   responseStyle: 'comment_only',

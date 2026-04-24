@@ -7,9 +7,13 @@ import {
   Response as UndiciResponse,
   fetch as undiciFetch
 } from 'undici'
+import {
+  FLOWRITE_DEFAULT_DIRECT_CLAUDE_BASE_URL,
+  FLOWRITE_DEFAULT_DIRECT_CLAUDE_MODEL
+} from '../../../flowrite/constants'
 
-export const DEFAULT_FLOWRITE_MODEL = process.env.FLOWRITE_MODEL || 'anthropic/claude-sonnet-4.6'
-export const DEFAULT_FLOWRITE_AI_BASE_URL = process.env.FLOWRITE_AI_BASE_URL || 'https://ai-gateway.vercel.sh'
+export const DEFAULT_FLOWRITE_MODEL = process.env.FLOWRITE_MODEL || FLOWRITE_DEFAULT_DIRECT_CLAUDE_MODEL
+export const DEFAULT_FLOWRITE_AI_BASE_URL = process.env.FLOWRITE_AI_BASE_URL || FLOWRITE_DEFAULT_DIRECT_CLAUDE_BASE_URL
 
 const UNDICI_WEB_APIS = {
   fetch: undiciFetch,
@@ -67,9 +71,13 @@ export const resolveAnthropicFetch = (target = globalThis, webApis = UNDICI_WEB_
   return normalizedTarget.fetch.bind(normalizedTarget)
 }
 
+export const resolveDefaultAnthropicApiKey = () => {
+  return process.env.ANTHROPIC_API_KEY || process.env.AI_GATEWAY_API_KEY || ''
+}
+
 export const getAnthropicClientConfig = (overrides = {}) => {
   const {
-    apiKey = process.env.AI_GATEWAY_API_KEY || '',
+    apiKey = resolveDefaultAnthropicApiKey(),
     model = DEFAULT_FLOWRITE_MODEL,
     baseURL = DEFAULT_FLOWRITE_AI_BASE_URL,
     defaultHeaders = {}

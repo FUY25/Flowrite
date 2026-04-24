@@ -1540,6 +1540,17 @@ export default {
     color: inherit;
   }
 
+  ::highlight(flowrite-suggestion-trace) {
+    background-color: rgba(83, 116, 178, 0.08);
+    color: inherit;
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: rgba(83, 116, 178, 0.58);
+    text-decoration-thickness: 1.5px;
+    text-decoration-skip-ink: none;
+    text-underline-offset: 0.14em;
+  }
+
   .typewriter .editor-component {
     padding-top: calc(50vh - 136px);
     padding-bottom: calc(50vh - 54px);
